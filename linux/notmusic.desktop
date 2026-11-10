@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=NotMusic
+GenericName=Music Player
+Comment=Native NotMusic music client
+Exec=notmusic
+Icon=notmusic
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+Keywords=music;player;
+StartupWMClass=notmusic

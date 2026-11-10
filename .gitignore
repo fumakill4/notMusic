@@ -1,0 +1,10 @@
+/target/
+/dist/
+/installer/Output/
+*.dmg
+*.zip
+*.tar.gz
+*.7z
+.DS_Store
+
+Icon?
