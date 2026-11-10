@@ -1897,9 +1897,9 @@ fn font_picker(ui: &mut Ui) -> Option<String> {
     picked.filter(|p| *p != current)
 }
 
-const SYSTEM_DEFAULT: &str = "Windows default";
+const SYSTEM_DEFAULT: &str = "System default";
 
-fn output_device_picker(app: &mut App, ui: &mut Ui) {
+pub(super) fn output_device_picker(app: &mut App, ui: &mut Ui) {
     let current = match &app.output_device {
         None => SYSTEM_DEFAULT.to_owned(),
         Some((id, name)) => match app.output_devices.iter().find(|d| d.id == *id) {

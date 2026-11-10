@@ -118,6 +118,8 @@ fn body(app: &mut App, ui: &mut Ui, now: f64) {
         super::glyphs::draw(ui, pos2(vol_rect.left() + 15.0, vol_rect.center().y), 15.0, super::glyphs::VOLUME[super::glyphs::volume_step(app.audio.volume())], theme::text());
         super::shell::volume_slider(app, ui, Rect::from_min_max(pos2(vol_rect.left() + 29.0, vol_rect.top() + 5.0), pos2(vol_rect.right() - 8.0, vol_rect.bottom() - 5.0)), "now-playing-volume");
         ui.add_space(8.0);
+        super::pages::output_device_picker(app, ui);
+        ui.add_space(8.0);
         // Its actions (like, download, share…) are for what's heard: a song version
         // standing in for the music video. It lives beside the star under the cover;
         // only when the cover column is hidden (a narrow window showing lyrics) does
