@@ -6,7 +6,7 @@ use egui::{Color32, Rect, Sense, Ui, Vec2, pos2, vec2};
 
 use super::widgets::{self, icon_button, named, text_at};
 use super::{Action, App, NpTab, Repeat, karaoke};
-use crate::lyrics::{Lyrics, Provider, Sync, SyncKind};
+use crate::lyrics::{Lyrics, Sync, SyncKind};
 use crate::shader::Params;
 use crate::theme::{self, icon};
 
@@ -108,8 +108,16 @@ fn body(app: &mut App, ui: &mut Ui, now: f64) {
             app.set_fullscreen(ui.ctx(), false);
         }
     }
+    if icon_button(&mut hui, icon::MAXIMIZE_2, 18.0, "Mini player", false).clicked() {
+        app.actions.push(Action::Mini(true));
+    }
     hui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         ui.add_space(super::titlebar::right_gap(ui.ctx(), ui.max_rect(), 0.0));
+        let (vol_rect, _) = ui.allocate_exact_size(vec2(148.0, 30.0), Sense::hover());
+        ui.painter().rect_filled(vol_rect, 15.0, theme::glass(0.13));
+        super::glyphs::draw(ui, pos2(vol_rect.left() + 15.0, vol_rect.center().y), 15.0, super::glyphs::VOLUME[super::glyphs::volume_step(app.audio.volume())], theme::text());
+        super::shell::volume_slider(app, ui, Rect::from_min_max(pos2(vol_rect.left() + 29.0, vol_rect.top() + 5.0), pos2(vol_rect.right() - 8.0, vol_rect.bottom() - 5.0)), "now-playing-volume");
+        ui.add_space(8.0);
         // Its actions (like, download, share…) are for what's heard: a song version
         // standing in for the music video. It lives beside the star under the cover;
         // only when the cover column is hidden (a narrow window showing lyrics) does
@@ -217,6 +225,24 @@ fn body(app: &mut App, ui: &mut Ui, now: f64) {
             }
         }
     }
+    // Keep the cover/lyrics view's core controls visible, instead of hiding them in
+    // the song's overflow menu: Lyrics, Queue, and language/romanization settings.
+    let toolbar = Rect::from_min_size(pos2(area.right() - 300.0, area.bottom() - 48.0), vec2(280.0, 40.0));
+    let mut tui = ui.new_child(egui::UiBuilder::new().max_rect(toolbar).layout(egui::Layout::right_to_left(egui::Align::Center)));
+    if widgets::pill(&mut tui, "Lyrics", None, app.np_tab == NpTab::Lyrics).clicked() {
+        app.np_tab = if app.np_tab == NpTab::Lyrics { NpTab::Art } else { NpTab::Lyrics };
+    }
+    if widgets::pill(&mut tui, "Queue", Some(icon::LIST_MUSIC), app.np_tab == NpTab::UpNext).clicked() {
+        app.np_tab = if app.np_tab == NpTab::UpNext { NpTab::Art } else { NpTab::UpNext };
+    }
+    let language = widgets::pill(&mut tui, "Aa", None, false);
+    egui::Popup::menu(&language).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
+        ui.set_width(270.0);
+        ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+        ui.add_space(4.0);
+        lyric_options(app, ui);
+        ui.add_space(4.0);
+    });
 }
 
 /// Size of the artwork laid out in `col`: what is left once the sleeve's information,

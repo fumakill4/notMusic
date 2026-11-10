@@ -1143,6 +1143,18 @@ fn settings_body(app: &mut App, ui: &mut Ui) {
     settings_card(ui, |ui| network(app, ui));
     super::transfer::settings_section(app, ui);
     settings_shortcuts(ui);
+    ui.add_space(30.0);
+    ui.vertical_centered(|ui| {
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new(format!("NotMusic v{} (build {})", crate::update::current_version(), crate::BUILD_NUMBER)).color(theme::text_dim()).size(12.0));
+            ui.add_space(12.0);
+            ui.hyperlink_to("GitHub", "https://github.com/fumakill4/NotMusic");
+            ui.add_space(8.0);
+            ui.hyperlink_to("Developer", "https://github.com/fumakill4");
+        });
+        ui.add_space(8.0);
+        ui.label(egui::RichText::new("Created by C.Tambayong - NotMusic is an independent, cross-platform music experience for macOS, iOS, and Windows.").color(theme::text_faint()).size(11.0));
+    });
 }
 
 /// Settings › Version & Updates. Update feeds stay dormant while the repo is private.

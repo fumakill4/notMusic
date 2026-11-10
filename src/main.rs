@@ -49,8 +49,9 @@ use std::sync::{Arc, OnceLock};
 use crossbeam_channel::unbounded;
 
 /// Window size on first launch, and the smallest it may be (points).
-pub const DEFAULT_SIZE: [f32; 2] = [1200.0, 780.0];
+pub const DEFAULT_SIZE: [f32; 2] = [1100.0, 740.0];
 pub const MIN_SIZE: [f32; 2] = [760.0, 480.0];
+pub const BUILD_NUMBER: &str = "2";
 
 fn main() -> eframe::Result {
     // Child-process modes for the webview windows (see login.rs / turnstile.rs).
@@ -105,6 +106,7 @@ fn main() -> eframe::Result {
     let mut viewport = egui::ViewportBuilder::default()
         .with_title("NotMusic")
         .with_app_id("notmusic")
+        .with_maximized(false)
         .with_inner_size(DEFAULT_SIZE)
         .with_min_inner_size(MIN_SIZE)
         // Windows: the app draws its own title bar (see `ui::titlebar`).

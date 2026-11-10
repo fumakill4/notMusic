@@ -530,6 +530,8 @@ pub struct App {
     window_hidden: bool,
     /// eframe's saved window geometry ("window") from the last time it was visible.
     good_window: Option<String>,
+    /// Reset the first launch after this startup layout was introduced/upgraded.
+    startup_window_reset: bool,
     /// The sidebar is a narrow icon rail.
     sidebar_collapsed: bool,
     /// The sidebar playlists' order (by id), and the ones hidden from it.
@@ -573,6 +575,7 @@ impl App {
         storage: Option<&dyn eframe::Storage>,
     ) -> Self {
         let get = |k: &str| storage.and_then(|s| s.get_string(k));
+        let startup_window_reset = get("startup_window_preset_v2").is_none();
         // Dev hook: YTM_FONT=<font name> tries a font without saving it.
         theme::set_font_choice(&dev_var("YTM_FONT").map(str::to_owned).or_else(|| get("font")).unwrap_or_default());
         let discord_enabled = get("discord_enabled").is_none_or(|v| v == "1");
@@ -686,6 +689,7 @@ impl App {
             exiting: false,
             window_hidden: false,
             good_window: get("window"),
+            startup_window_reset,
             sidebar_collapsed: get("sidebar_collapsed").is_some_and(|v| v == "1"),
             playlist_order: get("playlist_order").map(|v| v.lines().filter(|l| !l.is_empty()).map(str::to_owned).collect()).unwrap_or_default(),
             hidden_playlists: get("hidden_playlists").map(|v| v.lines().filter(|l| !l.is_empty()).map(str::to_owned).collect()).unwrap_or_default(),
@@ -1154,7 +1158,9 @@ impl eframe::App for App {
                 }
             }
         }
-        fit_window_to_monitor(ctx);
+        if fit_window_to_monitor(ctx, self.startup_window_reset) {
+            self.startup_window_reset = false;
+        }
         // Dev hook: YTM_MINI=<secs>[,<secs>…] switches between the mini player and the
         // full window at those times (YTM_MINI=1: the mini player after a second).
         if let Some(v) = dev_var("YTM_MINI") {
@@ -1390,6 +1396,7 @@ impl eframe::App for App {
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        storage.set_string("startup_window_preset_v2", "1".to_owned());
         if std::env::var_os("YTM_MUTE").is_none() {
             storage.set_string("volume", self.audio.volume().to_string());
         }
@@ -1554,11 +1561,11 @@ struct PlayingAs {
 
 
 /// A restored window size can exceed the monitor (e.g. saved after maximizing),
-/// leaving the player bar partly off-screen. Once at startup, maximize instead.
-fn fit_window_to_monitor(ctx: &egui::Context) {
+/// leaving the player bar partly off-screen. First launch uses the centered default.
+fn fit_window_to_monitor(ctx: &egui::Context, force_default: bool) -> bool {
     let done = egui::Id::unique("fit-window-checked");
     if ctx.data(|d| d.get_temp::<bool>(done).unwrap_or(false)) {
-        return;
+        return true;
     }
     if std::env::var_os("YTM_BACKGROUND").is_some() {
         // eframe re-applies the saved (often maximized) window state regardless of the
@@ -1572,27 +1579,32 @@ fn fit_window_to_monitor(ctx: &egui::Context) {
             Some(egui::vec2(w.parse().ok()?, h.parse().ok()?))
         });
         ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(size.unwrap_or(egui::vec2(1920.0, 1057.0))));
-        return;
+        return true;
     }
     let (outer, monitor, maximized) = ctx.input(|i| (i.viewport().outer_rect, i.viewport().monitor_size, i.viewport().maximized));
-    let (Some(outer), Some(monitor)) = (outer, monitor) else { return };
+    let (Some(outer), Some(monitor)) = (outer, monitor) else { return false };
     ctx.data_mut(|d| d.insert_temp(done, true));
     let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, monitor);
-    // A saved size below the minimum (closed while minimized saves a tiny one, which
-    // eframe restores as-is) would open a window too small to see: start over centred.
     let min = egui::Vec2::from(crate::MIN_SIZE);
-    if maximized != Some(true) && (outer.width() < min.x || outer.height() < min.y) {
-        let size = egui::Vec2::from(crate::DEFAULT_SIZE).min(monitor * 0.9).max(min);
-        log::info!("window {outer:?} is below the minimum size; resetting to {size:?}");
+    let size = egui::Vec2::from(crate::DEFAULT_SIZE).min(monitor * 0.88).max(min);
+    // First launch after this layout update: discard an old maximized/oversized
+    // geometry once, then remember the new default on save.
+    if force_default {
+        log::info!("setting first-launch window size to {size:?} on monitor {monitor:?}");
+        ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(false));
         ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(size));
         ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(((monitor - size) / 2.0).max(egui::Vec2::ZERO).to_pos2()));
-        return;
+        return true;
     }
-    // A little slack for the invisible resize borders Windows adds around the frame.
-    if maximized != Some(true) && !screen.expand(12.0).contains_rect(outer) {
-        log::info!("window {outer:?} exceeds monitor {monitor:?}; maximizing");
-        ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(true));
+    // Leave an intentional maximize alone. If a restored normal window is off-screen
+    // or too small, bring it back at a useful size instead of maximizing it.
+    if maximized != Some(true) && (outer.width() < min.x || outer.height() < min.y || !screen.expand(12.0).contains_rect(outer)) {
+        log::info!("window {outer:?} does not fit monitor {monitor:?}; restoring centered size {size:?}");
+        ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(false));
+        ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(size));
+        ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(((monitor - size) / 2.0).max(egui::Vec2::ZERO).to_pos2()));
     }
+    true
 }
 
 /// Smooth scrolling: mouse-wheel notches (line units) are collected and replayed as

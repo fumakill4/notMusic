@@ -192,8 +192,8 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
         ui.add_space(8.0);
-        let (r, resp) = ui.allocate_exact_size(vec2(32.0, 32.0), Sense::click());
-        mark(ui, Rect::from_center_size(r.center(), vec2(30.0, 20.0)), theme::with_alpha(theme::text(), a));
+        let (r, resp) = ui.allocate_exact_size(vec2(100.0 * (1.0 - t) + 32.0 * t, 32.0), Sense::click());
+        sidebar_wordmark(ui, r, a);
         let resp = named(resp, "Home");
         let resp = if collapsed { resp } else { resp.on_hover_cursor(egui::CursorIcon::PointingHand) };
         if resp.clicked() && !collapsed {
@@ -1044,13 +1044,34 @@ fn mark(ui: &Ui, r: Rect, tint: Color32) {
     ui.painter().image(tex.id(), dst, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), tint);
 }
 
+/// The white NotMusic wordmark replaces the sample app's mark in the sidebar.
+fn sidebar_wordmark(ui: &Ui, r: Rect, opacity: f32) {
+    const LOGO: &[u8] = include_bytes!("../../assets/icon/notmusic-wordmark.png");
+    let key = egui::Id::new("notmusic-sidebar-wordmark");
+    let tex = match ui.ctx().data(|d| d.get_temp::<egui::TextureHandle>(key)) {
+        Some(t) => t,
+        None => {
+            let Ok(img) = image::load_from_memory(LOGO) else { return };
+            let img = img.into_rgba8();
+            let color = egui::ColorImage::from_rgba_unmultiplied([img.width() as usize, img.height() as usize], img.as_raw());
+            let t = ui.ctx().load_texture("notmusic-sidebar-wordmark", color, egui::TextureOptions::LINEAR);
+            ui.ctx().data_mut(|d| d.insert_temp(key, t.clone()));
+            t
+        }
+    };
+    let fitted = r.shrink2(vec2(2.0, 2.0));
+    let k = (fitted.width() / 3.0).min(fitted.height());
+    let dst = Rect::from_center_size(fitted.center(), vec2(3.0 * k, k));
+    ui.painter().image(tex.id(), dst, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::from_white_alpha((opacity * 255.0) as u8));
+}
+
 /// Where Mute keeps the volume to go back to (the player bar's and the mini player's).
 pub fn unmute_id() -> egui::Id {
     egui::Id::unique("unmute")
 }
 
 /// The volume track: click or drag to set, scroll over it to nudge.
-fn volume_slider(app: &mut App, ui: &mut Ui, slider: Rect, salt: &str) {
+pub(super) fn volume_slider(app: &mut App, ui: &mut Ui, slider: Rect, salt: &str) {
     let vol = app.audio.volume();
     let vresp = ui.interact(slider, ui.scope_id().with(salt), Sense::click_and_drag()).on_hover_cursor(egui::CursorIcon::PointingHand);
     vresp.widget_info(|| egui::WidgetInfo::slider(true, vol as f64, "Volume"));

@@ -474,7 +474,10 @@ pub fn strip(app: &mut App, ui: &mut Ui, now: f64) {
     if titlebar::drag_strip(ui, r, "mini").double_clicked() {
         app.actions.push(Action::Mini(false));
     }
-    ui.painter().rect_filled(r, theme::thumb_radius() + 1.0, theme::panel(0.62));
+    // macOS already clips the mini-player window to its native rounded shape. Drawing
+    // another rounded capsule inside it creates the detached half-pill seen behind it.
+    let radius = if cfg!(target_os = "macos") { 0.0 } else { theme::thumb_radius() + 1.0 };
+    ui.painter().rect_filled(r, radius, theme::panel(0.62));
 
     // An Automix handoff keeps the outgoing song here until the next one is louder.
     let hold = app.mix_hold().is_some();
