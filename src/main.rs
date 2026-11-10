@@ -51,7 +51,7 @@ use crossbeam_channel::unbounded;
 /// Window size on first launch, and the smallest it may be (points).
 pub const DEFAULT_SIZE: [f32; 2] = [1100.0, 740.0];
 pub const MIN_SIZE: [f32; 2] = [760.0, 480.0];
-pub const BUILD_NUMBER: &str = "2";
+pub const BUILD_NUMBER: &str = "3";
 
 fn main() -> eframe::Result {
     // Child-process modes for the webview windows (see login.rs / turnstile.rs).

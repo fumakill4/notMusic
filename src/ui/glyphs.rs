@@ -20,6 +20,8 @@ pub const STAR_FILLED: &[u8] = include_bytes!("../../assets/icon/glyphs/star_fil
 pub const LYRICS: &[u8] = include_bytes!("../../assets/icon/glyphs/lyrics.png");
 pub const LYRICS_OFF: &[u8] = include_bytes!("../../assets/icon/glyphs/lyrics_off.png");
 pub const QUEUE: &[u8] = include_bytes!("../../assets/icon/glyphs/queue.png");
+pub const PIP: &[u8] = include_bytes!("../../assets/icon/glyphs/pip.png");
+pub const TRANSLATE: &[u8] = include_bytes!("../../assets/icon/glyphs/translate.png");
 pub const MAXIMIZE_2: &[u8] = include_bytes!("../../assets/icon/glyphs/maximize2.png");
 pub const VOLUME: [&[u8]; 4] = [
     include_bytes!("../../assets/icon/glyphs/volume_0.png"),

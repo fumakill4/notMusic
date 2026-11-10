@@ -192,7 +192,7 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
         ui.add_space(8.0);
-        let (r, resp) = ui.allocate_exact_size(vec2(100.0 * (1.0 - t) + 32.0 * t, 32.0), Sense::click());
+        let (r, resp) = ui.allocate_exact_size(vec2(132.0 * (1.0 - t) + 32.0 * t, 40.0), Sense::click());
         sidebar_wordmark(ui, r, a);
         let resp = named(resp, "Home");
         let resp = if collapsed { resp } else { resp.on_hover_cursor(egui::CursorIcon::PointingHand) };
@@ -684,21 +684,17 @@ fn suggestion_text(ui: &Ui, pos: Pos2, text: &str, typed: &str, width: f32) {
 pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
     let full = ui.max_rect();
     if frosted {
-        // The page scrolls on under this strip: fade it out rather than end it at the
-        // player's edge. Clicks in the fade stay with the player, not the rows beneath.
-        vgradient(ui.painter(), full, theme::panel(0.0), theme::panel(0.66));
+        // Keep the floating capsule as the only painted player surface. A full-width
+        // fade here reads as a second, rectangular panel behind the capsule.
         ui.interact(full, ui.id().with("player-strip"), Sense::hover());
     }
     const H: f32 = 56.0;
     let w = (full.width() - 24.0).min(668.0);
     let cap = Rect::from_min_size(pos2(full.center().x - w / 2.0, full.bottom() - 16.0 - H), vec2(w, H));
     let ctx = ui.ctx().clone();
-    widgets::soft_shadow(ui, cap, H / 2.0, 20.0, 0.45);
-    // Frosted: the page's colours show through a milky pane, with a lit top half and
-    // a bright rim standing in for the blur egui can't do.
-    ui.painter().rect_filled(cap, H / 2.0, theme::panel(0.88));
-    let top = Rect::from_min_max(cap.min, pos2(cap.max.x, cap.min.y + H * 0.55));
-    ui.painter().rect_filled(top, egui::CornerRadius { nw: 28, ne: 28, sw: 0, se: 0 }, theme::glass(0.07));
+    // Keep the capsule surface and controls unchanged; only remove the separate
+    // full-width background fade above it.
+    ui.painter().rect_filled(cap, H / 2.0, theme::panel(0.96));
     ui.painter().rect_stroke(cap, H / 2.0, egui::Stroke::new(1.0, theme::glass(0.2)), egui::StrokeKind::Inside);
     ui.painter().hline(cap.x_range().shrink(26.0), cap.top() + 1.0, egui::Stroke::new(1.0, theme::glass(0.24)));
 
@@ -1060,8 +1056,9 @@ fn sidebar_wordmark(ui: &Ui, r: Rect, opacity: f32) {
         }
     };
     let fitted = r.shrink2(vec2(2.0, 2.0));
-    let k = (fitted.width() / 3.0).min(fitted.height());
-    let dst = Rect::from_center_size(fitted.center(), vec2(3.0 * k, k));
+    let image = tex.size_vec2();
+    let k = (fitted.width() / image.x).min(fitted.height() / image.y);
+    let dst = Rect::from_center_size(fitted.center(), image * k);
     ui.painter().image(tex.id(), dst, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::from_white_alpha((opacity * 255.0) as u8));
 }
 

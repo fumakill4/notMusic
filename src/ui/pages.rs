@@ -1144,7 +1144,8 @@ fn settings_body(app: &mut App, ui: &mut Ui) {
     super::transfer::settings_section(app, ui);
     settings_shortcuts(ui);
     ui.add_space(30.0);
-    ui.vertical_centered(|ui| {
+    let footer_width = ui.available_width();
+    ui.allocate_ui_with_layout(vec2(footer_width, 52.0), egui::Layout::top_down(egui::Align::Center), |ui| {
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new(format!("NotMusic v{} (build {})", crate::update::current_version(), crate::BUILD_NUMBER)).color(theme::text_dim()).size(12.0));
             ui.add_space(12.0);

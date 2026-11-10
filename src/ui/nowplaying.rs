@@ -4,7 +4,8 @@
 
 use egui::{Color32, Rect, Sense, Ui, Vec2, pos2, vec2};
 
-use super::widgets::{self, icon_button, named, text_at};
+use super::glyphs;
+use super::widgets::{self, icon_at, named, text_at};
 use super::{Action, App, NpTab, Repeat, karaoke};
 use crate::lyrics::{Lyrics, Sync, SyncKind};
 use crate::shader::Params;
@@ -100,26 +101,35 @@ fn body(app: &mut App, ui: &mut Ui, now: f64) {
     // Header: on the window buttons' line, when the app draws them.
     let lift = 20.0 - f32::from(super::titlebar::top_margin(20, 44.0));
     let header = Rect::from_min_size(area.min - vec2(0.0, if app.fullscreen { 0.0 } else { lift }), vec2(area.width(), 44.0));
+    let left_controls = Rect::from_min_size(header.min + vec2(0.0, 5.0), vec2(72.0, 34.0));
+    ui.painter().rect_filled(left_controls, 17.0, theme::glass(0.12));
+    ui.painter().rect_stroke(left_controls, 17.0, egui::Stroke::new(0.8, theme::glass(0.2)), egui::StrokeKind::Inside);
     let mut hui = ui.new_child(egui::UiBuilder::new().max_rect(header).layout(egui::Layout::left_to_right(egui::Align::Center)));
-    // The player's own close, top left; the window buttons keep the top right.
-    if icon_button(&mut hui, icon::CHEVRON_DOWN, 22.0, "Close now playing", false).clicked() {
+    // Match the Mac player chrome: close and Picture in Picture share one glass capsule.
+    let (group_rect, _) = hui.allocate_exact_size(vec2(72.0, 34.0), Sense::hover());
+    let close_rect = Rect::from_center_size(pos2(group_rect.left() + 21.0, group_rect.center().y), vec2(30.0, 30.0));
+    let close = widgets::named(hui.interact(close_rect, hui.scope_id().with("np-close"), Sense::click()), "Close now playing").on_hover_cursor(egui::CursorIcon::PointingHand);
+    let close_hover = theme::anim_bool(ui.ctx(), close.id.with("h"), close.hovered(), 0.15);
+    icon_at(&hui, close_rect.center(), icon::X, 16.0, theme::lerp_color(theme::text_dim(), theme::text(), close_hover));
+    if close.clicked() {
         app.np_open = false;
         if app.fullscreen {
             app.set_fullscreen(ui.ctx(), false);
         }
     }
-    if icon_button(&mut hui, icon::MAXIMIZE_2, 18.0, "Mini player", false).clicked() {
+    let pip_rect = Rect::from_center_size(pos2(group_rect.left() + 52.0, group_rect.center().y), vec2(28.0, 28.0));
+    let pip = widgets::named(hui.interact(pip_rect, hui.scope_id().with("np-mini"), Sense::click()), "Mini player").on_hover_cursor(egui::CursorIcon::PointingHand);
+    let pip_hover = theme::anim_bool(ui.ctx(), pip.id.with("h"), pip.hovered(), 0.15);
+    glyphs::draw(&hui, pip_rect.center(), 17.0, super::glyphs::PIP, theme::lerp_color(theme::text_dim(), theme::text(), pip_hover));
+    if pip.clicked() {
         app.actions.push(Action::Mini(true));
     }
     hui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         ui.add_space(super::titlebar::right_gap(ui.ctx(), ui.max_rect(), 0.0));
         let (vol_rect, _) = ui.allocate_exact_size(vec2(148.0, 30.0), Sense::hover());
         ui.painter().rect_filled(vol_rect, 15.0, theme::glass(0.13));
-        super::glyphs::draw(ui, pos2(vol_rect.left() + 15.0, vol_rect.center().y), 15.0, super::glyphs::VOLUME[super::glyphs::volume_step(app.audio.volume())], theme::text());
-        super::shell::volume_slider(app, ui, Rect::from_min_max(pos2(vol_rect.left() + 29.0, vol_rect.top() + 5.0), pos2(vol_rect.right() - 8.0, vol_rect.bottom() - 5.0)), "now-playing-volume");
-        ui.add_space(8.0);
-        super::pages::output_device_picker(app, ui);
-        ui.add_space(8.0);
+        super::shell::volume_slider(app, ui, Rect::from_min_max(pos2(vol_rect.left() + 8.0, vol_rect.top() + 5.0), pos2(vol_rect.right() - 31.0, vol_rect.bottom() - 5.0)), "now-playing-volume");
+        super::glyphs::draw(ui, pos2(vol_rect.right() - 15.0, vol_rect.center().y), 15.0, super::glyphs::VOLUME[super::glyphs::volume_step(app.audio.volume())], theme::text());
         // Its actions (like, download, share…) are for what's heard: a song version
         // standing in for the music video. It lives beside the star under the cover;
         // only when the cover column is hidden (a narrow window showing lyrics) does
@@ -227,18 +237,36 @@ fn body(app: &mut App, ui: &mut Ui, now: f64) {
             }
         }
     }
-    // Keep the cover/lyrics view's core controls visible, instead of hiding them in
-    // the song's overflow menu: Lyrics, Queue, and language/romanization settings.
-    let toolbar = Rect::from_min_size(pos2(area.right() - 300.0, area.bottom() - 48.0), vec2(280.0, 40.0));
-    let mut tui = ui.new_child(egui::UiBuilder::new().max_rect(toolbar).layout(egui::Layout::right_to_left(egui::Align::Center)));
-    if widgets::pill(&mut tui, "Lyrics", None, app.np_tab == NpTab::Lyrics).clicked() {
-        app.np_tab = if app.np_tab == NpTab::Lyrics { NpTab::Art } else { NpTab::Lyrics };
+    // Keep the original cover-and-lyrics layout. Only add the reference's compact
+    // Translate / Lyrics / Queue controls at the lower-right edge.
+    let toolbar = Rect::from_min_size(pos2(area.right() - 146.0, area.bottom() - 48.0), vec2(146.0, 42.0));
+    let mut tui = ui.new_child(egui::UiBuilder::new().max_rect(toolbar).layout(egui::Layout::left_to_right(egui::Align::Center)));
+    tui.spacing_mut().item_spacing.x = 0.0;
+    let (translate_rect, translate_resp) = tui.allocate_exact_size(vec2(42.0, 42.0), Sense::click());
+    let translate_resp = widgets::named(translate_resp, "Translate and lyric options").on_hover_cursor(egui::CursorIcon::PointingHand);
+    let translate_open = egui::Popup::is_id_open(tui.ctx(), egui::Popup::default_response_id(&translate_resp));
+    let th = theme::anim_bool(tui.ctx(), translate_resp.id.with("h"), translate_resp.hovered() || translate_open, 0.12);
+    tui.painter().circle_filled(translate_rect.center(), 20.5, theme::lerp_color(Color32::WHITE, Color32::WHITE, th));
+    glyphs::draw(&tui, translate_rect.center(), 23.0, super::glyphs::TRANSLATE, theme::menu_fill());
+    tui.add_space(6.0);
+    let (panel_rect, _) = tui.allocate_exact_size(vec2(86.0, 42.0), Sense::hover());
+    tui.painter().rect_filled(panel_rect, 21.0, theme::glass(0.12));
+    tui.painter().rect_stroke(panel_rect, 21.0, egui::Stroke::new(0.8, theme::glass(0.18)), egui::StrokeKind::Inside);
+    let active = if app.np_tab == NpTab::Lyrics { Some(0) } else if app.np_tab == NpTab::UpNext { Some(1) } else { None };
+    if let Some(index) = active {
+        let selected = Rect::from_min_size(pos2(panel_rect.left() + 3.0 + 40.0 * index as f32, panel_rect.top() + 3.0), vec2(40.0, 36.0));
+        tui.painter().rect_filled(selected, 18.0, Color32::from_white_alpha(224));
     }
-    if widgets::pill(&mut tui, "Queue", Some(icon::LIST_MUSIC), app.np_tab == NpTab::UpNext).clicked() {
-        app.np_tab = if app.np_tab == NpTab::UpNext { NpTab::Art } else { NpTab::UpNext };
+    for (index, (tab, glyph, label)) in [(NpTab::Lyrics, glyphs::LYRICS, "Lyrics"), (NpTab::UpNext, glyphs::QUEUE, "Queue")].into_iter().enumerate() {
+        let rect = Rect::from_min_size(pos2(panel_rect.left() + 3.0 + 40.0 * index as f32, panel_rect.top() + 3.0), vec2(40.0, 36.0));
+        let resp = widgets::named(tui.interact(rect, tui.scope_id().with(("np-panel-control", label)), Sense::click()), label).on_hover_cursor(egui::CursorIcon::PointingHand);
+        let selected = active == Some(index);
+        glyphs::draw(&tui, rect.center(), 20.0, glyph, if selected { theme::menu_fill() } else { theme::text() });
+        if resp.clicked() {
+            app.np_tab = if selected { NpTab::Art } else { tab };
+        }
     }
-    let language = widgets::pill(&mut tui, "Aa", None, false);
-    egui::Popup::menu(&language).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
+    egui::Popup::menu(&translate_resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
         ui.set_width(270.0);
         ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
         ui.add_space(4.0);
@@ -746,7 +774,7 @@ fn sync_label(k: SyncKind) -> &'static str {
 
 /// The ⋯ menu: the song's actions, and with lyrics showing, the source picker,
 /// translation and romanization toggles, and this song's timing offset above them.
-fn options_menu(app: &mut App, ui: &mut Ui, rect: Rect, track: &crate::model::Track, lyrics: bool) {
+pub(super) fn options_menu(app: &mut App, ui: &mut Ui, rect: Rect, track: &crate::model::Track, lyrics: bool) {
     let resp = ui.interact(rect, ui.scope_id().with("np-options"), Sense::click());
     let resp = named(resp, "Options").on_hover_cursor(egui::CursorIcon::PointingHand);
     let open = egui::Popup::is_id_open(ui.ctx(), egui::Popup::default_response_id(&resp));
