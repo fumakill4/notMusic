@@ -11,3 +11,6 @@
 - Deliverable: package `NotMusic-v1.0.0-build3-macos-arm64.dmg` in Downloads after the release build completes; verify plist, code signature, DMG, and checksum.
 - Known visual limit: the app has not yet been manually launched after the final edit; judge the delivered screenshot/test on whether the backdrop band is gone.
 - Next step: finish build, create and verify `NotMusic-v1.0.0-build1-macos-arm64.dmg`, update the daily report, and review Git diff before pushing to the already-authorized private repository.
+
+
+Superseded by final **NotMusic v1.0.0 build 5** DMG: `/Users/christambayong/Downloads/NotMusic-v1.0.0-build5-macos-arm64.dmg`. Build 4 was skipped on user request. The final report records build evidence and SHA-256.

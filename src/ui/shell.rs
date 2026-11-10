@@ -696,7 +696,6 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
     // full-width background fade above it.
     ui.painter().rect_filled(cap, H / 2.0, theme::panel(0.96));
     ui.painter().rect_stroke(cap, H / 2.0, egui::Stroke::new(1.0, theme::glass(0.2)), egui::StrokeKind::Inside);
-    ui.painter().hline(cap.x_range().shrink(26.0), cap.top() + 1.0, egui::Stroke::new(1.0, theme::glass(0.24)));
 
     let status = app.audio.status.clone();
     // An Automix handoff keeps the outgoing song on this strip until the next one is

@@ -1,6 +1,6 @@
 #!/bin/sh
 # Make NotMusic.app from a built binary:
-#   macos/bundle.sh target/release/notmusic 1.0.0 3 out [portable]
+#   macos/bundle.sh target/release/notmusic 1.0.0 5 out [portable]
 # With `portable`, the app keeps its data in a folder beside itself (see portable.txt).
 # Use the same local signing identity on repeat builds when available. A stable code
 # requirement lets Keychain remember an Always Allow decision for NotMusic.

@@ -1146,15 +1146,22 @@ fn settings_body(app: &mut App, ui: &mut Ui) {
     ui.add_space(30.0);
     let footer_width = ui.available_width();
     ui.allocate_ui_with_layout(vec2(footer_width, 52.0), egui::Layout::top_down(egui::Align::Center), |ui| {
-        ui.horizontal(|ui| {
-            ui.label(egui::RichText::new(format!("NotMusic v{} (build {})", crate::update::current_version(), crate::BUILD_NUMBER)).color(theme::text_dim()).size(12.0));
-            ui.add_space(12.0);
-            ui.hyperlink_to("GitHub", "https://github.com/fumakill4/NotMusic");
-            ui.add_space(8.0);
-            ui.hyperlink_to("Developer", "https://github.com/fumakill4");
-        });
+        ui.allocate_ui_with_layout(
+            vec2(footer_width, 20.0),
+            egui::Layout::left_to_right(egui::Align::Center).with_main_align(egui::Align::Center),
+            |ui| {
+                ui.label(egui::RichText::new(format!("NotMusic v{} (build {})", crate::update::current_version(), crate::BUILD_NUMBER)).color(theme::text_dim()).size(12.0));
+                ui.add_space(12.0);
+                ui.hyperlink_to("GitHub", "https://github.com/fumakill4/NotMusic");
+                ui.add_space(8.0);
+                ui.hyperlink_to("Developer", "https://github.com/fumakill4");
+            },
+        );
         ui.add_space(8.0);
-        ui.label(egui::RichText::new("Created by C.Tambayong - NotMusic is an independent, cross-platform music experience for macOS, iOS, and Windows.").color(theme::text_faint()).size(11.0));
+        ui.add_sized(
+            vec2(footer_width, 16.0),
+            egui::Label::new(egui::RichText::new("Created by C.Tambayong - NotMusic is an independent, cross-platform music experience for macOS, iOS, and Windows.").color(theme::text_faint()).size(11.0)).halign(egui::Align::Center),
+        );
     });
 }
 

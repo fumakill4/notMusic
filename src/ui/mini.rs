@@ -135,6 +135,8 @@ fn clamp_size(p: Place) -> Place {
 enum Step {
     /// Waiting for a maximized full window to come down, so its normal place is known.
     Unmaximize,
+    /// Waiting for the native title bar to be removed or restored before sizing.
+    Decorations(bool),
     /// Move and resize now.
     Resize,
     /// Moved onto a monitor with another scale: size it once the window has that scale.
@@ -278,14 +280,19 @@ impl Mini {
             return;
         }
         let to_mini = !self.on;
-        let mut step = Step::Resize;
-        if to_mini {
+        let step = if to_mini {
             self.was_maximized = ctx.input(|i| i.viewport().maximized == Some(true));
             if self.was_maximized {
                 ctx.send_viewport_cmd(ViewportCommand::Maximized(false));
-                step = Step::Unmaximize;
+                Step::Unmaximize
+            } else {
+                ctx.send_viewport_cmd(ViewportCommand::Decorations(false));
+                Step::Decorations(false)
             }
-        }
+        } else {
+            ctx.send_viewport_cmd(ViewportCommand::Decorations(true));
+            Step::Decorations(true)
+        };
         self.switch = Some(Switch { to_mini, step, since: now, from: ctx.content_rect().size() });
         ctx.request_repaint();
     }
@@ -331,7 +338,17 @@ impl Mini {
                 if down {
                     self.full = Place::current(ctx).map(|p| (p, true));
                 }
-                (down || waited > 0.5).then_some(Step::Resize)
+                if down || waited > 0.5 {
+                    ctx.send_viewport_cmd(ViewportCommand::Decorations(false));
+                    Some(Step::Decorations(false))
+                } else {
+                    None
+                }
+            }
+            Step::Decorations(on) => {
+                let frame = ctx.input(|i| i.viewport().outer_rect.zip(i.viewport().inner_rect).map(|(outer, inner)| outer.size() - inner.size()));
+                let matches = frame.is_some_and(|size| (size.length() < 2.0) == !on);
+                (matches || waited > 0.6).then_some(Step::Resize)
             }
             Step::Resize => Some(self.resize(ctx, to_mini)),
             Step::Rescale(target) => (scale.is_some_and(|s| (s - target.scale).abs() < 0.01) || waited > 0.6).then(|| {
@@ -528,13 +545,11 @@ pub fn strip(app: &mut App, ui: &mut Ui, now: f64) {
     if pin.clicked() && reveal > 0.5 {
         app.mini.set_pinned(&ctx, !app.mini.pinned);
     }
-    if titlebar::custom() {
-        let close = button(ui, pos2(r.right() - 20.0, top_y), 30.0, "close", Mark::Font(icon::X), "Close", reveal);
-        if close.clicked() && reveal > 0.5 {
-            match CLOSE {
-                CloseButton::LikeFullWindow => ctx.send_viewport_cmd(ViewportCommand::Close),
-                CloseButton::Expand => app.actions.push(Action::Mini(false)),
-            }
+    let close = button(ui, pos2(r.right() - 20.0, top_y), 30.0, "close", Mark::Font(icon::X), "Close", reveal);
+    if close.clicked() && reveal > 0.5 {
+        match CLOSE {
+            CloseButton::LikeFullWindow => ctx.send_viewport_cmd(ViewportCommand::Close),
+            CloseButton::Expand => app.actions.push(Action::Mini(false)),
         }
     }
 
