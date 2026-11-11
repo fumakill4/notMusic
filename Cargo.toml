@@ -3,8 +3,8 @@ name = "notmusic"
 version = "1.0.0"
 edition = "2024"
 license = "GPL-3.0-only"
-repository = "https://github.com/fumakill4/NotMusic"
-description = "NotMusic native Rust music player"
+repository = "https://github.com/fumakill4/notMusic"
+description = "notMusic native Rust music player"
 
 [dependencies]
 anyhow = "1.0.104"

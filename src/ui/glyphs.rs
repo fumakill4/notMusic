@@ -1,4 +1,4 @@
-//! NotMusic's own icon set, drawn from `NotMusicIcons`' path data.
+//! notMusic's own icon set, drawn from `notMusicIcons`' path data.
 //!
 //! The paths come from the desktop app's shared icon file and are baked to PNG at
 //! 256px (Chromium's own rasteriser, so the arcs and the two-contour outlines are

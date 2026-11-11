@@ -104,7 +104,7 @@ fn main() -> eframe::Result {
     // taskbar, so automated test runs don't pop up over whatever the user is doing.
     let background = std::env::var_os("YTM_BACKGROUND").is_some();
     let mut viewport = egui::ViewportBuilder::default()
-        .with_title("NotMusic")
+        .with_title("notMusic")
         .with_app_id("notmusic")
         .with_maximized(false)
         .with_inner_size(DEFAULT_SIZE)
@@ -137,7 +137,7 @@ fn main() -> eframe::Result {
     };
 
     let run = eframe::run_native(
-        "NotMusic",
+        "notMusic",
         options,
         Box::new(|cc| {
             let ctx = cc.egui_ctx.clone();

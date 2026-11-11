@@ -23,11 +23,11 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-const REPOSITORY: &str = "https://api.github.com/repos/fumakill4/NotMusic";
-const LATEST: &str = "https://api.github.com/repos/fumakill4/NotMusic/releases/latest";
-const ALL_RELEASES: &str = "https://api.github.com/repos/fumakill4/NotMusic/releases";
-const BY_TAG: &str = "https://api.github.com/repos/fumakill4/NotMusic/releases/tags/v";
-pub const RELEASES: &str = "https://github.com/fumakill4/NotMusic/releases";
+const REPOSITORY: &str = "https://api.github.com/repos/fumakill4/notMusic";
+const LATEST: &str = "https://api.github.com/repos/fumakill4/notMusic/releases/latest";
+const ALL_RELEASES: &str = "https://api.github.com/repos/fumakill4/notMusic/releases";
+const BY_TAG: &str = "https://api.github.com/repos/fumakill4/notMusic/releases/tags/v";
+pub const RELEASES: &str = "https://github.com/fumakill4/notMusic/releases";
 
 /// Release notes by version: `None` while fetching or when there are none.
 type Notes = Arc<Mutex<std::collections::HashMap<String, Option<String>>>>;
@@ -37,10 +37,10 @@ pub enum State {
     Idle,
     Checking,
     UpToDate,
-    /// The configured repository is private; update checks wake up after it becomes public.
+    /// The configured release feed was unavailable; a later check may succeed.
     Unavailable,
     Downloading { version: String, percent: u8 },
-    /// `installer` is the setup exe, or for the portable build the new NotMusic executable.
+    /// `installer` is the setup exe, or for the portable build the new notMusic executable.
     Ready { version: String, installer: PathBuf },
     Failed(String),
 }
@@ -526,7 +526,7 @@ fn run_detached(script: &str) {
 }
 
 fn client() -> anyhow::Result<reqwest::Client> {
-    Ok(crate::proxy::apply(reqwest::Client::builder()).user_agent(concat!("NotMusic/", env!("CARGO_PKG_VERSION"))).connect_timeout(std::time::Duration::from_secs(10)).read_timeout(std::time::Duration::from_secs(30)).build()?)
+    Ok(crate::proxy::apply(reqwest::Client::builder()).user_agent(concat!("notMusic/", env!("CARGO_PKG_VERSION"))).connect_timeout(std::time::Duration::from_secs(10)).read_timeout(std::time::Duration::from_secs(30)).build()?)
 }
 
 #[cfg(test)]

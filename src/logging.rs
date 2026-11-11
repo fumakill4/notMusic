@@ -93,7 +93,7 @@ fn setup(dir: &Path, kind: Kind) {
 
     let args: Vec<String> = std::env::args().collect();
     log::info!(
-        "=== NotMusic {} ({}/{}) ===",
+        "=== notMusic {} ({}/{}) ===",
         env!("CARGO_PKG_VERSION"),
         std::env::consts::OS,
         std::env::consts::ARCH

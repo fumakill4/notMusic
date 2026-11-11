@@ -1,7 +1,7 @@
 //! Handwritten artist signatures, from the listener's own signature service.
 //!
 //! Nothing is asked of anywhere until a link is typed into Settings. The contract is
-//! the one NotMusic's desktop build has always used: `{artist}` in the link is
+//! the one notMusic's desktop build has always used: `{artist}` in the link is
 //! replaced with the encoded name, a bare host gets `/v1/signatures`, and anything
 //! else has `artist=…&type=handwritten` appended.
 

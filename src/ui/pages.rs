@@ -1150,9 +1150,9 @@ fn settings_body(app: &mut App, ui: &mut Ui) {
             vec2(footer_width, 20.0),
             egui::Layout::left_to_right(egui::Align::Center).with_main_align(egui::Align::Center),
             |ui| {
-                ui.label(egui::RichText::new(format!("NotMusic v{} (build {})", crate::update::current_version(), crate::BUILD_NUMBER)).color(theme::text_dim()).size(12.0));
+                ui.label(egui::RichText::new(format!("notMusic v{} (build {})", crate::update::current_version(), crate::BUILD_NUMBER)).color(theme::text_dim()).size(12.0));
                 ui.add_space(12.0);
-                ui.hyperlink_to("GitHub", "https://github.com/fumakill4/NotMusic");
+                ui.hyperlink_to("GitHub", "https://github.com/fumakill4/notMusic");
                 ui.add_space(8.0);
                 ui.hyperlink_to("Developer", "https://github.com/fumakill4");
             },
@@ -1160,7 +1160,7 @@ fn settings_body(app: &mut App, ui: &mut Ui) {
         ui.add_space(8.0);
         ui.add_sized(
             vec2(footer_width, 16.0),
-            egui::Label::new(egui::RichText::new("Created by C.Tambayong - NotMusic is an independent, cross-platform music experience for macOS, iOS, and Windows.").color(theme::text_faint()).size(11.0)).halign(egui::Align::Center),
+            egui::Label::new(egui::RichText::new("Created by C.Tambayong - notMusic is an independent, cross-platform music experience for macOS, iOS, and Windows.").color(theme::text_faint()).size(11.0)).halign(egui::Align::Center),
         );
     });
 }
@@ -1176,17 +1176,17 @@ fn settings_updates(app: &mut App, ui: &mut Ui) {
     let updater = app.updater.clone();
     let state = updater.as_ref().map(Updater::state).unwrap_or(State::Idle);
     let detail = match &state {
-        State::Idle => "Updates will activate when the NotMusic repository is public.".to_owned(),
+        State::Idle => "Update checks use the public notMusic release feed.".to_owned(),
         State::Checking => "Checking for updates…".to_owned(),
         State::UpToDate => "You’re using the latest version.".to_owned(),
-        State::Unavailable => "Updates are paused until the NotMusic repository is public.".to_owned(),
+        State::Unavailable => "The release feed could not be reached. Try again later.".to_owned(),
         State::Downloading { version, percent } => format!("Downloading version {version} · {percent}%"),
-        State::Ready { version, .. } => format!("Version {version} is ready to install. Restart NotMusic to finish."),
+        State::Ready { version, .. } => format!("Version {version} is ready to install. Restart notMusic to finish."),
         State::Failed(error) => format!("Couldn’t check for updates: {error}"),
     };
     let mut check = false;
     settings_card(ui, |ui| {
-        setting_row(ui, &format!("NotMusic {}", current_version()), Some(&detail), |ui| {
+        setting_row(ui, &format!("notMusic {}", current_version()), Some(&detail), |ui| {
             if matches!(&state, State::Checking | State::Downloading { .. }) {
                 ui.spinner();
             } else if matches!(&state, State::Idle | State::Unavailable) {
@@ -1629,7 +1629,7 @@ fn settings_appearance(app: &mut App, ui: &mut Ui) {
 fn settings_window(app: &mut App, ui: &mut Ui) {
     section_label(ui, "Window", None);
     settings_card(ui, |ui| {
-        setting_row(ui, "Close to tray", Some("Clicking × hides the window and keeps the music playing. Click the tray icon to bring it back, or right-click it to quit. If the icon never shows up, launching NotMusic again brings the window back; --no-tray starts a session where × quits for real."), |ui| {
+        setting_row(ui, "Close to tray", Some("Clicking × hides the window and keeps the music playing. Click the tray icon to bring it back, or right-click it to quit. If the icon never shows up, launching notMusic again brings the window back; --no-tray starts a session where × quits for real."), |ui| {
             toggle(ui, &mut app.close_to_tray, "Close to tray");
         });
         divider(ui);
@@ -1676,7 +1676,7 @@ fn settings_connections(app: &mut App, ui: &mut Ui) {
         let busy = app.lastfm_busy.load(Ordering::Relaxed);
         let desc = match &app.lastfm_user {
             Some(name) => format!("Scrobbling what you play to {name}'s profile."),
-            None if busy => "Allow NotMusic on the Last.fm page that opened in your browser.".to_owned(),
+            None if busy => "Allow notMusic on the Last.fm page that opened in your browser.".to_owned(),
             None => "Scrobble what you play to your Last.fm profile.".to_owned(),
         };
         let (mut connect, mut disconnect) = (false, false);
@@ -1740,7 +1740,7 @@ fn network(app: &mut App, ui: &mut Ui) {
     use crate::proxy::{self, Setting};
     let same = |a: &Setting, b: &Setting| std::mem::discriminant(a) == std::mem::discriminant(b);
     let mut pick = None;
-    setting_row(ui, "Proxy", Some("Send everything NotMusic fetches through a proxy: songs, lyrics, sign-in and Listen together."), |ui| {
+    setting_row(ui, "Proxy", Some("Send everything notMusic fetches through a proxy: songs, lyrics, sign-in and Listen together."), |ui| {
         let btn = dropdown_button(ui, app.proxy_mode.label(), 220.0, "Proxy");
         egui::Popup::menu(&btn).show(|ui| {
             ui.set_width(220.0);
@@ -1772,7 +1772,7 @@ fn network(app: &mut App, ui: &mut Ui) {
             divider(ui);
             let desc = match proxy::system() {
                 Some(p) => format!("Windows is set to use {}.", proxy::redact(&p)),
-                None => "Windows isn't set to use a proxy, so NotMusic connects directly.".to_owned(),
+                None => "Windows isn't set to use a proxy, so notMusic connects directly.".to_owned(),
             };
             setting_row(ui, "Windows proxy", Some(&desc), |_| {});
         }

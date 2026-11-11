@@ -72,13 +72,13 @@ impl Drop for Tray {
 
 fn build(png: image::RgbaImage) -> anyhow::Result<TrayIcon> {
     let menu = Menu::with_items(&[
-        &MenuItem::with_id("show", "Show NotMusic", true, None),
+        &MenuItem::with_id("show", "Show notMusic", true, None),
         &MenuItem::with_id("quit", "Quit", true, None),
     ])?;
     let (w, h) = png.dimensions();
     Ok(TrayIconBuilder::new()
         .with_icon(tray_icon::Icon::from_rgba(png.into_raw(), w, h)?)
-        .with_tooltip("NotMusic")
+        .with_tooltip("notMusic")
         .with_menu(Box::new(menu))
         .with_menu_on_left_click(false)
         .build()?)
