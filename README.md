@@ -1,12 +1,12 @@
 <div align="center">
-  <h1>NotMusic</h1>
-  <p><strong>Your music library and player, in a compact native desktop app and iOS.</strong></p>
+  <img src="assets/branding/notmusic-logo.png" alt="NotMusic" width="620">
+  <p><strong>Your music library and player for macOS and iOS.</strong></p>
   <p>NotMusic is written primarily in Rust, with an egui interface and rodio-based audio playback.</p>
 
   <p>
     <a href="https://github.com/fumakill4/NotMusic/releases/latest"><img src="https://img.shields.io/github/v/release/fumakill4/NotMusic?style=flat-square&color=a855f7&labelColor=0d1117" alt="Latest release"></a>
     <a href="https://github.com/fumakill4/NotMusic/releases"><img src="https://img.shields.io/github/downloads/fumakill4/NotMusic/total?style=flat-square&color=a855f7&labelColor=0d1117" alt="Downloads"></a>
-    <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-333?style=flat-square&labelColor=0d1117" alt="Platforms">
+    <img src="https://img.shields.io/badge/platform-macOS%20%7C%20iOS-333?style=flat-square&labelColor=0d1117" alt="Platforms: macOS and iOS">
     <a href="LICENSE"><img src="https://img.shields.io/github/license/fumakill4/NotMusic?style=flat-square&color=333&labelColor=0d1117" alt="GPL-3.0 license"></a>
   </p>
 
@@ -20,6 +20,10 @@
 </div>
 
 > NotMusic is an independent, unofficial client. It is not affiliated with or endorsed by YouTube, Google, or Apple.
+
+## Why the name NotMusic?
+
+NotMusic is a playful parody of a familiar subscription music app. The name pokes fun at subscriptions that seem to keep getting more expensive, while the artwork reflects our reaction to a recent icon redesign that some listeners say they preferred in its earlier form. It's our creative take on the subject, not an official product or a statement on behalf of every listener.
 
 ## A look around
 
@@ -51,13 +55,10 @@ NotMusic's desktop interface and playback run natively. Sign-in and selected int
 
 ## Run NotMusic
 
-Choose the newest installer for your operating system from [GitHub Releases](https://github.com/fumakill4/NotMusic/releases/latest).
+Download the current [NotMusic release](https://github.com/fumakill4/NotMusic/releases/latest).
 
-- **macOS:** open the Apple Silicon DMG and move NotMusic to Applications. Intel builds are provided only when listed on the release.
-- **Windows:** use the setup or portable archive attached to the release, then launch `notmusic.exe`.
-- **Linux:** follow the package instructions attached to the Linux release.
-
-If Windows warns that an unsigned build is unfamiliar, verify that you downloaded it from this repository's Releases page before choosing whether to run it.
+- **macOS:** open the Apple Silicon DMG and move NotMusic to Applications.
+- **iOS:** download the unsigned IPA and install it with your signing tool.
 
 ## Work on the source
 
@@ -69,15 +70,13 @@ cd NotMusic
 cargo build --release
 ```
 
-The executable is written to `target/release/`. Platform-specific development can also need native audio libraries and components for sign-in or system integrations; see the platform guides in this repository.
+The executable is written to `target/release/`. macOS development may also need native audio libraries and components for sign-in or system integrations; see the development guides in this repository.
 
 ### Diagnostic logs
 
 When reporting a problem, include the relevant log after removing tokens or other private data:
 
-- **Windows:** `%APPDATA%\NotMusic\data\notmusic.log` (portable builds keep `data` beside the executable)
 - **macOS:** `~/Library/Application Support/NotMusic/data/notmusic.log`
-- **Linux:** `~/.local/share/NotMusic/data/notmusic.log`
 
 The previous run is retained as `notmusic.prev.log`. Sign-in helper processes write separate `notmusic-login.log`, `notmusic-spotify.log` and `notmusic-turnstile.log` files nearby.
 
@@ -95,7 +94,7 @@ Bug reports and pull requests are welcome. For a useful report, include your OS,
 ## Acknowledgements
 
 - [Jacky Chan's BitChord PC Continued](https://github.com/jackychan4891/BitChord-PC-Continued) — the original PC application in this desktop project lineage.
-- [LoserDenji's Bitchord Desktop Revived](https://github.com/LoserDenji/Bitchord-Desktop-Revived) — continued desktop development for macOS and Linux. The NotMusic macOS DMG was adapted from their DMG package; its branding and contents were changed for NotMusic.
+- [LoserDenji's Bitchord Desktop Revived](https://github.com/LoserDenji/Bitchord-Desktop-Revived) — continued desktop development. The NotMusic macOS DMG was adapted from their DMG package; its branding and contents were changed for NotMusic.
 - [egui](https://github.com/emilk/egui), [rodio](https://github.com/RustAudio/rodio) and Symphonia — interface and audio components used by this project.
 
 NotMusic is maintained by **Fumakill4** as an independent project. It is not an official BitChord build.
