@@ -96,7 +96,6 @@ Bug reports and pull requests are welcome. For a useful report, include your OS,
 
 - [Jacky Chan's BitChord PC Continued](https://github.com/jackychan4891/BitChord-PC-Continued) — the original PC application in this desktop project lineage.
 - [LoserDenji's Bitchord Desktop Revived](https://github.com/LoserDenji/Bitchord-Desktop-Revived) — continued desktop development for macOS and Linux. The NotMusic macOS DMG was adapted from their DMG package; its branding and contents were changed for NotMusic.
-- [Martin BAGUMA's BitChord](https://github.com/bagumamartin/BitChord) and [Kushagra Singh's Android BitChord](https://github.com/kushagrasinghx/BitChord) — upstream Apple and Android project lineage used by the related NotMusic iOS app.
 - [egui](https://github.com/emilk/egui), [rodio](https://github.com/RustAudio/rodio) and Symphonia — interface and audio components used by this project.
 
 NotMusic is maintained by **Fumakill4** as an independent project. It is not an official BitChord build.
