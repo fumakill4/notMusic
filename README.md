@@ -1,6 +1,6 @@
 <div align="center">
   <h1>NotMusic</h1>
-  <p><strong>Your music library and player, in a compact native desktop app.</strong></p>
+  <p><strong>Your music library and player, in a compact native desktop app and iOS.</strong></p>
   <p>NotMusic is written primarily in Rust, with an egui interface and rodio-based audio playback.</p>
 
   <p>
