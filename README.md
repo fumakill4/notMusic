@@ -1,79 +1,67 @@
 <div align="center">
   <h1>NotMusic</h1>
-  <p><strong>A fast, native YouTube Music desktop app — rebuilt in Rust.</strong></p>
-  <p>Built with egui and rodio. No Electron, no embedded browser player, and light on memory while playing.</p>
+  <p><strong>Your music library and player, in a compact native desktop app.</strong></p>
+  <p>NotMusic is written primarily in Rust, with an egui interface and rodio-based audio playback.</p>
 
   <p>
     <a href="https://github.com/fumakill4/NotMusic/releases/latest"><img src="https://img.shields.io/github/v/release/fumakill4/NotMusic?style=flat-square&color=a855f7&labelColor=0d1117" alt="Latest release"></a>
     <a href="https://github.com/fumakill4/NotMusic/releases"><img src="https://img.shields.io/github/downloads/fumakill4/NotMusic/total?style=flat-square&color=a855f7&labelColor=0d1117" alt="Downloads"></a>
     <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-333?style=flat-square&labelColor=0d1117" alt="Platforms">
-    <a href="LICENSE"><img src="https://img.shields.io/github/license/fumakill4/NotMusic?style=flat-square&color=333&labelColor=0d1117" alt="License: GPL-3.0"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/github/license/fumakill4/NotMusic?style=flat-square&color=333&labelColor=0d1117" alt="GPL-3.0 license"></a>
   </p>
 
   <p>
-    <a href="https://discord.gg/cWQSGjpXM">Discord</a> ·
-    <a href="https://github.com/fumakill4/NotMusic/releases/latest">Download</a> ·
-    <a href="#features">Features</a> ·
-    <a href="#installation">Installation</a> ·
-    <a href="#building-from-source">Build from source</a>
+    <a href="https://discord.gg/cWQSGjpXM">Community</a> ·
+    <a href="https://github.com/fumakill4/NotMusic/releases/latest">Get NotMusic</a> ·
+    <a href="#what-it-can-do">Features</a> ·
+    <a href="#run-notmusic">Install</a> ·
+    <a href="#work-on-the-source">Source code</a>
   </p>
 </div>
 
-> NotMusic is an independent, unofficial client. It is not affiliated with, endorsed by, or connected to YouTube, Google, or Apple.
+> NotMusic is an independent, unofficial client. It is not affiliated with or endorsed by YouTube, Google, or Apple.
 
-## Screenshots
+## A look around
 
-<table>
-  <tr>
-    <td width="50%"><img src="docs/readme/screenshot-1.png" alt="Full player with artwork, lyrics and controls"></td>
-    <td width="50%"><img src="docs/readme/screenshot-2.png" alt="Browse view with shelves and playback controls"></td>
-  </tr>
-  <tr>
-    <td align="center"><b>Player</b> — artwork, lyrics, queue and playback in one view</td>
-    <td align="center"><b>Browse</b> — your music, shelves and navigation</td>
-  </tr>
-  <tr>
-    <td colspan="2"><img src="docs/readme/screenshot-3.png" alt="NotMusic interface and playback" width="100%"></td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center"><b>Desktop experience</b> — native UI, fast playback, and quality controls</td>
-  </tr>
-</table>
+| Now playing | Browse your music |
+| --- | --- |
+| <img src="docs/readme/screenshot-1.png" alt="NotMusic player with cover art, lyrics and controls"> | <img src="docs/readme/screenshot-2.png" alt="NotMusic browsing music shelves"> |
 
-## Features
+<p align="center"><img src="docs/readme/screenshot-3.png" alt="NotMusic desktop interface" width="100%"></p>
 
-**Playback**
-- **YouTube Music, natively** — search, browse, albums, playlists, artist pages, radio, mixes, charts and your library.
-- **Lossless / Hi-Res Lossless / Dolby Atmos** — play higher-quality copies from configured hi-res addon sources when a matching copy is available, with YouTube audio as the fallback.
-- **Quality controls in the player** — see the active audio quality, prefer Dolby Atmos when available, and revert or upgrade quality from the player menu.
-- **Automix and crossfade** — DJ-style transitions between songs, with a mixing state shown in the player during transitions.
-- **Queue and playback controls** — shuffle, repeat, autoplay, song radio, next-track prefetch, volume normalization, and output device selection.
-- **Downloads** — save songs for offline playback.
+## What it can do
 
-**Lyrics and interface**
-- **Synced lyrics** — timed lyrics with provider fallbacks, timing controls, romanization and translation options.
-- **Native Rust desktop UI** — a fast egui/rodio interface with system media controls, tray integration, and keyboard-friendly navigation.
-- **Discord Rich Presence** — show what you’re listening to on Discord.
-- **Last.fm scrobbling** — connect your Last.fm account in Settings.
+### Listen and manage playback
 
-**Accounts and library**
-- **Google sign-in** — unlock your YouTube Music feed, likes, playlists, history and recommendations.
-- **Library and uploads** — access saved music and uploaded tracks where available.
-- **Listen Together / jams** — start or join a shared listening session.
-- **Spotify transfer** — bring playlists and liked music over from Spotify.
+- Explore YouTube Music content, including tracks, albums, artists, playlists, mixes, radio and charts.
+- Use shuffle, repeat, autoplay, queue controls, prefetching, volume normalization and output selection.
+- Save supported tracks for offline listening.
+- Crossfade between songs or let Automix choose a transition for the pair.
+- Connect configured add-on sources for a higher-quality match, including lossless, hi-res or Dolby Atmos when available; YouTube audio remains the fallback.
 
-## Installation
+### Make the player yours
 
-Download the latest build from [Releases](https://github.com/fumakill4/NotMusic/releases/latest).
+- Follow time-synced lyrics, adjust their timing, and choose translation or romanization options.
+- Keep playback controls in the player, tray and system media controls.
+- Share a listening session with Listen Together, or connect Discord Rich Presence and Last.fm scrobbling.
+- Sign in to access supported YouTube Music recommendations, playlists, likes, history and uploads.
+- Move playlists and liked tracks from Spotify with the transfer tool.
 
-- **Windows** — download the Windows release asset, extract/install it, and run `notmusic.exe`.
-- **macOS / Linux** — use the platform release assets when available.
+NotMusic's desktop interface and playback run natively. Sign-in and selected integrations may open a system web view. Features that depend on external services or add-on sources work only while those services provide a compatible response.
 
-If Windows SmartScreen appears for an unsigned build, choose **More info → Run anyway**.
+## Run NotMusic
 
-## Building from source
+Choose the newest installer for your operating system from [GitHub Releases](https://github.com/fumakill4/NotMusic/releases/latest).
 
-You need the [Rust toolchain](https://rustup.rs/).
+- **macOS:** open the Apple Silicon DMG and move NotMusic to Applications. Intel builds are provided only when listed on the release.
+- **Windows:** use the setup or portable archive attached to the release, then launch `notmusic.exe`.
+- **Linux:** follow the package instructions attached to the Linux release.
+
+If Windows warns that an unsigned build is unfamiliar, verify that you downloaded it from this repository's Releases page before choosing whether to run it.
+
+## Work on the source
+
+Install Rust from [rustup.rs](https://rustup.rs/), then clone and build:
 
 ```sh
 git clone https://github.com/fumakill4/NotMusic.git
@@ -81,42 +69,34 @@ cd NotMusic
 cargo build --release
 ```
 
-The built app will be in `target/release/`.
+The executable is written to `target/release/`. Platform-specific development can also need native audio libraries and components for sign-in or system integrations; see the platform guides in this repository.
 
-Platform builds may require native dependencies (audio/system libraries and toolchain components used by sign-in or platform integrations). Check the repository’s platform docs and release workflow for the exact prerequisites.
+### Diagnostic logs
 
-## Logs
+When reporting a problem, include the relevant log after removing tokens or other private data:
 
-The app writes `notmusic.log` beside its settings, keeping the previous run as `notmusic.prev.log` — attach both (secrets removed) to a bug report. Panics, warnings and errors are captured in it on Windows, macOS and Linux. Find it at:
+- **Windows:** `%APPDATA%\NotMusic\data\notmusic.log` (portable builds keep `data` beside the executable)
+- **macOS:** `~/Library/Application Support/NotMusic/data/notmusic.log`
+- **Linux:** `~/.local/share/NotMusic/data/notmusic.log`
 
-- **Windows** — `%APPDATA%\NotMusic\data\notmusic.log` (portable builds: a `data` folder next to the exe)
-- **macOS** — `~/Library/Application Support/NotMusic/data/notmusic.log`
-- **Linux** — `~/.local/share/NotMusic/data/notmusic.log`
+The previous run is retained as `notmusic.prev.log`. Sign-in helper processes write separate `notmusic-login.log`, `notmusic-spotify.log` and `notmusic-turnstile.log` files nearby.
 
-The sign-in windows are separate processes and log to `notmusic-login.log`, `notmusic-spotify.log` and `notmusic-turnstile.log` in the same folder.
+## Project notes
 
-Two launch flags help when the tray icon misbehaves (taskbar replacements can keep it from ever showing):
-
-- `notmusic --show` — bring a running copy's window back up (a plain launch does this too).
-- `notmusic --no-tray` — start a session where × quits for real instead of hiding to the tray.
-
-## Notes
-
-- Audio and the main interface are native (Rust + egui + rodio). Sign-in and some web flows may open a system webview window.
-- Hi-res/Lossless/Atmos playback depends on configured addon sources and whether a matching, playable copy exists for the selected track.
-- NotMusic does not bypass subscriptions, DRM, or regional restrictions. Availability depends on the services and sources you use.
-- Third-party services (YouTube Music, lyrics providers, Discord, Last.fm, Spotify, addon sources) can change behavior over time.
+- NotMusic does not bypass subscriptions, DRM or regional restrictions.
+- Hi-res and spatial-audio options depend on a configured source having a playable version of the selected track.
+- YouTube Music, lyric providers, Discord, Last.fm, Spotify and other external services may change independently of this app.
+- NotMusic is distributed under [GPL-3.0](LICENSE); the project lineage and selected runtime components are credited below.
 
 ## Contributing
 
-Bug reports and pull requests are welcome. Please open an issue with clear reproduction steps, platform details, and relevant logs (with secrets/tokens removed).
-
-## License
-
-NotMusic is licensed under [GPL-3.0](LICENSE).
+Bug reports and pull requests are welcome. For a useful report, include your OS, steps to reproduce, what you expected and the relevant redacted logs.
 
 ## Acknowledgements
 
-- [egui](https://github.com/emilk/egui) for the interface.
-- [rodio](https://github.com/RustAudio/rodio) and Symphonia for audio playback and decoding.
-- Lyrics, metadata, playback, and integrations depend on the upstream libraries and third-party services used by this project.
+- [Jacky Chan's BitChord PC Continued](https://github.com/jackychan4891/BitChord-PC-Continued) — the original PC application in this desktop project lineage.
+- [LoserDenji's Bitchord Desktop Revived](https://github.com/LoserDenji/Bitchord-Desktop-Revived) — continued desktop development for macOS and Linux. The NotMusic macOS DMG was adapted from their DMG package; its branding and contents were changed for NotMusic.
+- [Martin BAGUMA's BitChord](https://github.com/bagumamartin/BitChord) and [Kushagra Singh's Android BitChord](https://github.com/kushagrasinghx/BitChord) — upstream Apple and Android project lineage used by the related NotMusic iOS app.
+- [egui](https://github.com/emilk/egui), [rodio](https://github.com/RustAudio/rodio) and Symphonia — interface and audio components used by this project.
+
+NotMusic is maintained by **Fumakill4** as an independent project. It is not an official BitChord build.
