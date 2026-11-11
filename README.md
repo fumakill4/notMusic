@@ -27,9 +27,15 @@ notMusic is a playful parody of a familiar subscription music app. The name poke
 
 ## A look around
 
-| Now playing | Browse music |
-| --- | --- |
-| <img src="docs/readme/notmusic-screenshot-1.jpg" alt="notMusic player with cover art, synced lyrics and playback controls" width="100%"> | <img src="docs/readme/notmusic-screenshot-2.jpg" alt="notMusic home screen with music shelves and playback bar" width="100%"> |
+These screenshots come from notMusic running on macOS and iOS.
+
+### macOS
+
+<img src="docs/readme/notmusic-macos.jpg" alt="notMusic for macOS showing its player, synced lyrics and playback controls" width="100%">
+
+### iOS
+
+<p align="center"><img src="docs/readme/notmusic-ios.jpg" alt="notMusic for iOS browsing music with its compact player and tab bar" width="360"></p>
 
 ## What it can do
 
