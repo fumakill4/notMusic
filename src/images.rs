@@ -4,7 +4,7 @@
 //! Reusing the backend's reqwest client avoids a second HTTP/TLS stack in the binary.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use egui::load::{Bytes, BytesLoadResult, BytesLoader, BytesPoll, ImagePoll, LoadError, SizeHint, SizedTexture, TextureLoadResult, TextureLoader, TexturePoll};
@@ -19,6 +19,72 @@ const RETRY_AFTER: Duration = Duration::from_secs(30);
 const DISK_MAX_FILE: usize = 256 * 1024;
 /// The disk cache is trimmed to this, oldest first, at launch.
 const DISK_BUDGET: u64 = 64 * 1024 * 1024;
+/// Small CPU copies kept alongside GPU textures for effects that need to blur a cover.
+/// They are downsampled and LRU-bounded, so only a few dozen album covers stay resident.
+const CPU_COPY_SIDE: u32 = 512;
+const CPU_COPY_BUDGET: usize = 24 * 1024 * 1024;
+
+#[derive(Default)]
+struct CpuCopy {
+    image: image::RgbaImage,
+    last_used: u64,
+}
+
+#[derive(Default)]
+struct CpuCopies {
+    clock: u64,
+    bytes: usize,
+    entries: HashMap<String, CpuCopy>,
+}
+
+static CPU_COPIES: OnceLock<Mutex<CpuCopies>> = OnceLock::new();
+
+fn cache_cpu_copy(uri: &str, image: &egui::ColorImage) {
+    if !is_http(uri) || image.size[0] == 0 || image.size[1] == 0 {
+        return;
+    }
+    let raw: Vec<u8> = image.pixels.iter().flat_map(|pixel| pixel.to_array()).collect();
+    let Some(rgba) = image::RgbaImage::from_raw(image.size[0] as u32, image.size[1] as u32, raw) else {
+        return;
+    };
+    let largest = rgba.width().max(rgba.height());
+    let copy = if largest > CPU_COPY_SIDE {
+        let width = (rgba.width() as f32 * CPU_COPY_SIDE as f32 / largest as f32).round().max(1.0) as u32;
+        let height = (rgba.height() as f32 * CPU_COPY_SIDE as f32 / largest as f32).round().max(1.0) as u32;
+        image::imageops::resize(&rgba, width, height, image::imageops::FilterType::Triangle)
+    } else {
+        rgba
+    };
+    let size = copy.as_raw().len();
+    let cache = CPU_COPIES.get_or_init(|| Mutex::new(CpuCopies::default()));
+    let mut cache = cache.lock().unwrap();
+    cache.clock = cache.clock.wrapping_add(1);
+    let used = cache.clock;
+    if let Some(old) = cache.entries.remove(uri) {
+        cache.bytes = cache.bytes.saturating_sub(old.image.as_raw().len());
+    }
+    cache.bytes += size;
+    cache.entries.insert(uri.to_owned(), CpuCopy { image: copy, last_used: used });
+    while cache.bytes > CPU_COPY_BUDGET {
+        let Some(oldest) = cache.entries.iter().min_by_key(|(_, entry)| entry.last_used).map(|(key, _)| key.clone()) else {
+            break;
+        };
+        if let Some(old) = cache.entries.remove(&oldest) {
+            cache.bytes = cache.bytes.saturating_sub(old.image.as_raw().len());
+        }
+    }
+}
+
+/// A decoded, downsampled thumbnail retained for CPU-side cover effects such as blur.
+pub fn cached_rgba(uri: &str) -> Option<image::RgbaImage> {
+    let cache = CPU_COPIES.get_or_init(|| Mutex::new(CpuCopies::default()));
+    let mut cache = cache.lock().unwrap();
+    cache.clock = cache.clock.wrapping_add(1);
+    let used = cache.clock;
+    let entry = cache.entries.get_mut(uri)?;
+    entry.last_used = used;
+    Some(entry.image.clone())
+}
 
 enum Entry {
     Pending,
@@ -51,6 +117,12 @@ fn disk_path(dir: &std::path::Path, uri: &str) -> std::path::PathBuf {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     uri.hash(&mut h);
     dir.join(format!("{:016x}", h.finish()))
+}
+
+/// A small on-disk thumbnail already fetched by the image loader, for effects that
+/// need CPU pixels as well as the GPU texture (such as the MiniPlayer's frosted veil).
+pub fn cached_bytes(data_dir: &std::path::Path, uri: &str) -> Option<Vec<u8>> {
+    std::fs::read(disk_path(&data_dir.join("thumbs"), uri)).ok()
 }
 
 /// Keep the disk cache under its budget, dropping the least recently used files.
@@ -215,6 +287,7 @@ impl TextureLoader for Textures {
             ImagePoll::Pending { size } => Ok(TexturePoll::Pending { size }),
             ImagePoll::Ready { image } => {
                 let size = image.source_size;
+                cache_cpu_copy(uri, &image);
                 let handle = ctx.load_texture(uri, image, options);
                 let texture = SizedTexture::new(handle.id(), size);
                 let loaders = ctx.loaders();

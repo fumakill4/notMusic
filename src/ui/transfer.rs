@@ -1371,7 +1371,7 @@ fn failed(app: &mut App, ui: &mut Ui, e: &str) {
     let xfer = app.transfer.clone();
     ui.add_space(6.0);
     breadcrumb(app, ui);
-    page_title(ui, "Transfer stopped");
+    page_title(app, ui, "Transfer stopped");
     ui.add_space(10.0);
     // Only this transfer's own progress (one that failed before saving any has none).
     let source = xfer.job.lock().unwrap().as_ref().map(|j| j.source.clone());

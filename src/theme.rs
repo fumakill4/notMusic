@@ -16,7 +16,7 @@ const BG_LIGHT: Color32 = Color32::from_rgb(246, 244, 248);
 const TEXT_LIGHT: Color32 = Color32::from_rgb(22, 20, 26);
 const TEXT_DIM_LIGHT: Color32 = Color32::from_rgb(86, 82, 94);
 const TEXT_FAINT_LIGHT: Color32 = Color32::from_rgb(124, 118, 132);
-/// Default accent until a cover provides one (NotMusic pink).
+/// Default accent until a cover provides one (notMusic pink).
 pub const RED: Color32 = Color32::from_rgb(0xFA, 0x58, 0x6A);
 
 /// Light or dark, as the app picked it for what's being drawn (see `set_mode`): the
@@ -81,6 +81,22 @@ pub fn glass(a: f32) -> Color32 {
 /// `a`, or in light mode lighter.
 pub fn panel(a: f32) -> Color32 {
     if light() { Color32::from_white_alpha((a.clamp(0.0, 1.0) * 255.0) as u8) } else { shade(a) }
+}
+
+/// The compact player floats over page content, so tint it without hiding that content.
+/// Light mode uses a subtle dark veil instead of an opaque white panel; dark mode uses
+/// a translucent charcoal surface instead of the nearly opaque panel used by cards.
+pub fn player_glass() -> Color32 {
+    let k = f32::from_bits(GLASS.load(std::sync::atomic::Ordering::Relaxed)).clamp(0.5, 1.5);
+    if light() {
+        // A soft neutral tint, not a white card. Keep enough transparency for artwork
+        // and page content to remain apparent beneath the capsule.
+        Color32::from_rgba_unmultiplied(186, 181, 190, (164.0 * k).clamp(140.0, 190.0) as u8)
+    } else {
+        // Raise charcoal slightly above pure black and give it a frosted, substantial
+        // look while leaving the moving artwork visible through the glass.
+        Color32::from_rgba_unmultiplied(52, 51, 59, (214.0 * k).clamp(186.0, 232.0) as u8)
+    }
 }
 
 /// The active theme's secondary text colour, set with its chrome (read very often).

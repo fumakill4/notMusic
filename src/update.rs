@@ -23,11 +23,11 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-const REPOSITORY: &str = "https://api.github.com/repos/fumakill4/NotMusic";
-const LATEST: &str = "https://api.github.com/repos/fumakill4/NotMusic/releases/latest";
-const ALL_RELEASES: &str = "https://api.github.com/repos/fumakill4/NotMusic/releases";
-const BY_TAG: &str = "https://api.github.com/repos/fumakill4/NotMusic/releases/tags/v";
-pub const RELEASES: &str = "https://github.com/fumakill4/NotMusic/releases";
+const REPOSITORY: &str = "https://api.github.com/repos/fumakill4/notMusic";
+const LATEST: &str = "https://api.github.com/repos/fumakill4/notMusic/releases/latest";
+const ALL_RELEASES: &str = "https://api.github.com/repos/fumakill4/notMusic/releases";
+const BY_TAG: &str = "https://api.github.com/repos/fumakill4/notMusic/releases/tags/v";
+pub const RELEASES: &str = "https://github.com/fumakill4/notMusic/releases";
 
 /// Release notes by version: `None` while fetching or when there are none.
 type Notes = Arc<Mutex<std::collections::HashMap<String, Option<String>>>>;
@@ -37,11 +37,15 @@ pub enum State {
     Idle,
     Checking,
     UpToDate,
-    /// The configured repository is private; update checks wake up after it becomes public.
+    /// The configured release feed was unavailable; a later check may succeed.
     Unavailable,
+    /// macOS release available for a user initiated DMG download.
+    Available { version: String, url: String, filename: String, size: u64 },
     Downloading { version: String, percent: u8 },
-    /// `installer` is the setup exe, or for the portable build the new NotMusic executable.
+    /// `installer` is the setup exe, or for the portable build the new notMusic executable.
     Ready { version: String, installer: PathBuf },
+    /// DMG downloaded to the user's Downloads folder for manual installation.
+    Downloaded { version: String, path: PathBuf },
     Failed(String),
 }
 
@@ -230,7 +234,7 @@ impl Updater {
 
     /// Check for a newer release and download it, in the background.
     pub fn check(&self) {
-        if matches!(self.state(), State::Checking | State::Downloading { .. } | State::Ready { .. }) {
+        if matches!(self.state(), State::Checking | State::Downloading { .. } | State::Ready { .. } | State::Available { .. } | State::Downloaded { .. }) {
             return;
         }
         self.set(State::Checking);
@@ -280,6 +284,17 @@ impl Updater {
             return Ok(State::UpToDate);
         };
         let url = asset["browser_download_url"].as_str().ok_or_else(|| anyhow::anyhow!("asset has no URL"))?;
+        // Installed macOS builds offer the official GitHub DMG for manual
+        // installation. Avoid silently downloading, mounting, or replacing the
+        // user's app bundle in the background.
+        if cfg!(target_os = "macos") && !portable_dir().is_some() {
+            return Ok(State::Available {
+                version,
+                url: url.to_owned(),
+                filename: asset["name"].as_str().unwrap_or(&want).to_owned(),
+                size: asset["size"].as_u64().unwrap_or(0),
+            });
+        }
         let size = asset["size"].as_u64().unwrap_or(0);
         std::fs::create_dir_all(&self.dir)?;
         let path = self.dir.join(&want);
@@ -342,6 +357,57 @@ impl Updater {
         replace_binary(&installer, &exe, relaunch);
         #[cfg(windows)]
         self.run_installer(&installer, &exe, relaunch);
+    }
+
+    /// Download the available macOS DMG directly into Downloads.
+    pub fn download_available(&self) {
+        let State::Available { version, url, filename, size } = self.state() else { return };
+        self.set(State::Downloading { version: version.clone(), percent: 0 });
+        let this = self.clone();
+        std::thread::spawn(move || {
+            let run = async {
+                let dir = directories::UserDirs::new()
+                    .and_then(|u| u.download_dir().map(Path::to_path_buf))
+                    .ok_or_else(|| anyhow::anyhow!("couldn't find the Downloads folder"))?;
+                std::fs::create_dir_all(&dir)?;
+                let path = dir.join(&filename);
+                let part = path.with_extension("dmg.part");
+                let http = client()?;
+                let mut response = http.get(url).send().await?.error_for_status()?;
+                let total = response.content_length().filter(|n| *n > 0).unwrap_or(size);
+                let mut file = std::io::BufWriter::new(std::fs::File::create(&part)?);
+                let mut got = 0u64;
+                let mut shown = 0u8;
+                while let Some(chunk) = response.chunk().await? {
+                    std::io::Write::write_all(&mut file, &chunk)?;
+                    got += chunk.len() as u64;
+                    if total > 0 {
+                        let percent = (got * 100 / total).min(100) as u8;
+                        if percent != shown {
+                            shown = percent;
+                            this.set(State::Downloading { version: version.clone(), percent });
+                        }
+                    }
+                }
+                std::io::Write::flush(&mut file)?;
+                drop(file);
+                if size > 0 && got != size {
+                    let _ = std::fs::remove_file(&part);
+                    anyhow::bail!("download incomplete ({got} of {size} bytes)");
+                }
+                std::fs::rename(&part, &path)?;
+                anyhow::Ok(path)
+            };
+            let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build();
+            let result = runtime.map_err(anyhow::Error::from).and_then(|rt| rt.block_on(run));
+            match result {
+                Ok(path) => this.set(State::Downloaded { version, path }),
+                Err(e) => {
+                    log::warn!("update: DMG download failed: {e:#}");
+                    this.set(State::Failed(format!("DMG download failed: {e:#}")));
+                }
+            }
+        });
     }
 
     #[cfg(windows)]
@@ -526,7 +592,7 @@ fn run_detached(script: &str) {
 }
 
 fn client() -> anyhow::Result<reqwest::Client> {
-    Ok(crate::proxy::apply(reqwest::Client::builder()).user_agent(concat!("NotMusic/", env!("CARGO_PKG_VERSION"))).connect_timeout(std::time::Duration::from_secs(10)).read_timeout(std::time::Duration::from_secs(30)).build()?)
+    Ok(crate::proxy::apply(reqwest::Client::builder()).user_agent(concat!("notMusic/", env!("CARGO_PKG_VERSION"))).connect_timeout(std::time::Duration::from_secs(10)).read_timeout(std::time::Duration::from_secs(30)).build()?)
 }
 
 #[cfg(test)]

@@ -351,7 +351,7 @@ fn selection_bar(app: &mut App, ctx: &egui::Context, page: &Page, area: Rect) {
 // ------------------------------------------------------------------ home
 
 fn home(app: &mut App, ui: &mut Ui, now: f64) {
-    page_title(ui, "Home");
+    page_title(app, ui, "Home");
     // A refresh keeps showing the current feed; the skeleton is only for an empty one.
     if app.home.as_ref().is_none_or(|h| app.home_loading && h.shelves.is_empty()) {
         placeholder(app, ui, now, 3, CARD);
@@ -405,7 +405,7 @@ fn home(app: &mut App, ui: &mut Ui, now: f64) {
 // ------------------------------------------------------------------ new
 
 fn new(app: &mut App, ui: &mut Ui, now: f64) {
-    page_title(ui, "New");
+    page_title(app, ui, "New");
     if app.explore.is_none() {
         placeholder(app, ui, now, 2, CARD);
         return;
@@ -419,18 +419,29 @@ fn new(app: &mut App, ui: &mut Ui, now: f64) {
     card_row(ui, "ex-charts", "Charts", &e.charts, &mut app.actions);
 }
 
-pub(super) fn page_title(ui: &mut Ui, title: &str) {
+pub(super) fn page_title(app: &mut App, ui: &mut Ui, title: &str) {
     // Left-aligned with the page's content, a little below the top edge.
     ui.add_space(18.0);
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 42.0), Sense::hover());
     ui.painter().text(pos2(rect.left(), rect.center().y), Align2::LEFT_CENTER, title, theme::bold(34.0), theme::text());
+    page_avatar(app, ui, rect);
+}
+
+fn page_avatar(app: &mut App, ui: &mut Ui, row: Rect) {
+    let right = row.right() - super::titlebar::right_gap(ui.ctx(), row, 20.0);
+    let avatar = Rect::from_center_size(pos2(right - 18.0, row.center().y), Vec2::splat(36.0));
+    super::shell::account_button(app, ui, avatar);
+    if app.loading {
+        let spin = Rect::from_min_size(pos2(avatar.left() - 30.0, avatar.top() + 8.0), Vec2::splat(20.0));
+        ui.put(spin, egui::Spinner::new());
+    }
 }
 
 // ------------------------------------------------------------------ search
 
 fn search(app: &mut App, ui: &mut Ui, q: &str, now: f64) {
     let pick = super::transfer::pick_banner(app, ui);
-    page_title(ui, "Search");
+    page_title(app, ui, "Search");
     ui.add_space(10.0);
     // Coming from a suggestion, the sidebar or a link, the field says what's shown.
     // Only when the route changed: clearing the box leaves the route alone until Enter.
@@ -595,6 +606,9 @@ fn top_result(ui: &mut Ui, c: &Card, pick: bool, acts: &mut Vec<Action>) {    ui
 // ------------------------------------------------------------------ album / playlist
 
 fn collection(app: &mut App, ui: &mut Ui, id: &str, now: f64) {
+    ui.add_space(18.0);
+    let (header, _) = ui.allocate_exact_size(vec2(ui.available_width(), 42.0), Sense::hover());
+    page_avatar(app, ui, header);
     if app.opened(id).is_none() {
         placeholder(app, ui, now, 1, 232.0);
         return;
@@ -808,6 +822,9 @@ fn wordmark(ui: &Ui, base: egui::Pos2, logo: &crate::apple::LogoSrc, max_w: f32)
 }
 
 fn artist(app: &mut App, ui: &mut Ui, id: &str, now: f64) {
+    ui.add_space(18.0);
+    let (header, _) = ui.allocate_exact_size(vec2(ui.available_width(), 42.0), Sense::hover());
+    page_avatar(app, ui, header);
     if app.artist.as_ref().is_none_or(|a| a.id != id) {
         placeholder(app, ui, now, 2, CARD);
         return;
@@ -949,7 +966,7 @@ fn artist(app: &mut App, ui: &mut Ui, id: &str, now: f64) {
 // ------------------------------------------------------------------ library
 
 fn library(app: &mut App, ui: &mut Ui, tab: LibTab, now: f64) {
-    page_title(ui, "Library");
+    page_title(app, ui, "Library");
     if !app.logged_in {
         ui.add_space(10.0);
         ui.label(RichText::new("Sign in to see your playlists, liked songs and history.").color(theme::text_dim()));
@@ -1071,7 +1088,7 @@ fn library(app: &mut App, ui: &mut Ui, tab: LibTab, now: f64) {
 // ------------------------------------------------------------------ downloads
 
 fn downloads(app: &mut App, ui: &mut Ui, now: f64) {
-    page_title(ui, "Downloads");
+    page_title(app, ui, "Downloads");
     let songs = crate::downloads::list();
     ui.add_space(4.0);
     ui.label(
@@ -1129,7 +1146,7 @@ fn settings(app: &mut App, ui: &mut Ui) {
 }
 
 fn settings_body(app: &mut App, ui: &mut Ui) {
-    page_title(ui, "Settings");
+    page_title(app, ui, "Settings");
     settings_updates(app, ui);
     settings_account(app, ui);
     settings_playback(app, ui);
@@ -1145,29 +1162,38 @@ fn settings_body(app: &mut App, ui: &mut Ui) {
     settings_shortcuts(ui);
     ui.add_space(30.0);
     let footer_width = ui.available_width();
+    let version = format!("notMusic v{} (build {})", crate::update::current_version(), crate::BUILD_NUMBER);
+    let link_style = egui::TextStyle::Button.resolve(ui.style());
+    let (version_width, github_width, developer_width) = ui.ctx().fonts_mut(|fonts| {
+        (
+            fonts.layout_no_wrap(version.clone(), theme::regular(12.0), theme::text_dim()).size().x,
+            fonts.layout_no_wrap("GitHub".to_owned(), link_style.clone(), theme::text()).size().x,
+            fonts.layout_no_wrap("Developer".to_owned(), link_style, theme::text()).size().x,
+        )
+    });
+    let row_width = version_width + 12.0 + github_width + 8.0 + developer_width;
     ui.allocate_ui_with_layout(vec2(footer_width, 52.0), egui::Layout::top_down(egui::Align::Center), |ui| {
-        ui.allocate_ui_with_layout(
-            vec2(footer_width, 20.0),
-            egui::Layout::left_to_right(egui::Align::Center).with_main_align(egui::Align::Center),
-            |ui| {
-                ui.label(egui::RichText::new(format!("NotMusic v{} (build {})", crate::update::current_version(), crate::BUILD_NUMBER)).color(theme::text_dim()).size(12.0));
-                ui.add_space(12.0);
-                ui.hyperlink_to("GitHub", "https://github.com/fumakill4/NotMusic");
-                ui.add_space(8.0);
-                ui.hyperlink_to("Developer", "https://github.com/fumakill4");
-            },
-        );
+        // Center with an explicit leading spacer. `Align::Center` on a horizontal
+        // layout only centers child contents vertically in egui, not the whole row.
+        ui.horizontal(|ui| {
+            ui.add_space(((footer_width - row_width) / 2.0).max(0.0));
+            ui.label(egui::RichText::new(version).color(theme::text_dim()).size(12.0));
+            ui.add_space(12.0);
+            ui.hyperlink_to("GitHub", "https://github.com/fumakill4/notMusic");
+            ui.add_space(8.0);
+            ui.hyperlink_to("Developer", "https://github.com/fumakill4");
+        });
         ui.add_space(8.0);
         ui.add_sized(
             vec2(footer_width, 16.0),
-            egui::Label::new(egui::RichText::new("Created by C.Tambayong - NotMusic is an independent, cross-platform music experience for macOS, iOS, and Windows.").color(theme::text_faint()).size(11.0)).halign(egui::Align::Center),
+            egui::Label::new(egui::RichText::new("Created by C.Tambayong - notMusic is an independent, cross-platform music experience for macOS, iOS, and Windows.").color(theme::text_faint()).size(11.0)).halign(egui::Align::Center),
         );
     });
 }
 
 /// Settings › Version & Updates. Update feeds stay dormant while the repo is private.
 fn settings_updates(app: &mut App, ui: &mut Ui) {
-    use crate::update::{State, Updater, RELEASES, current_version};
+    use crate::update::{State, Updater, current_version};
     section_label(ui, "Version & Updates", None);
     if app.updater.is_none() {
         let wake = ui.ctx().clone();
@@ -1176,28 +1202,39 @@ fn settings_updates(app: &mut App, ui: &mut Ui) {
     let updater = app.updater.clone();
     let state = updater.as_ref().map(Updater::state).unwrap_or(State::Idle);
     let detail = match &state {
-        State::Idle => "Updates will activate when the NotMusic repository is public.".to_owned(),
+        State::Idle => "Update checks use the public notMusic release feed.".to_owned(),
         State::Checking => "Checking for updates…".to_owned(),
         State::UpToDate => "You’re using the latest version.".to_owned(),
-        State::Unavailable => "Updates are paused until the NotMusic repository is public.".to_owned(),
-        State::Downloading { version, percent } => format!("Downloading version {version} · {percent}%"),
-        State::Ready { version, .. } => format!("Version {version} is ready to install. Restart NotMusic to finish."),
+        State::Unavailable => "The release feed could not be reached. Try again later.".to_owned(),
+        State::Available { version, .. } => format!("Version {version} is available. Download the DMG here to install it manually."),
+        State::Downloading { version, percent } => format!("Downloading version {version} to Downloads · {percent}%"),
+        State::Ready { version, .. } => format!("Version {version} is ready to install. Restart notMusic to finish."),
+        State::Downloaded { version, path } => format!("Version {version} downloaded to {}.", path.display()),
         State::Failed(error) => format!("Couldn’t check for updates: {error}"),
     };
     let mut check = false;
     settings_card(ui, |ui| {
-        setting_row(ui, &format!("NotMusic {}", current_version()), Some(&detail), |ui| {
+        setting_row(ui, &format!("notMusic {}", current_version()), Some(&detail), |ui| {
             if matches!(&state, State::Checking | State::Downloading { .. }) {
                 ui.spinner();
-            } else if matches!(&state, State::Idle | State::Unavailable) {
-                ui.horizontal(|ui| {
-                    ui.hyperlink_to("GitHub", RELEASES);
-                    if pill(ui, "Check now", None, false).clicked() {
-                        check = true;
+            } else if matches!(&state, State::Available { .. }) {
+                if pill(ui, "Download .dmg", None, true).clicked() {
+                    if let Some(updater) = &updater {
+                        updater.download_available();
                     }
-                });
-            } else if pill(ui, "Check again", None, false).clicked() {
-                check = true;
+                }
+            } else if let State::Downloaded { path, .. } = &state {
+                if pill(ui, "Show in Finder", None, false).clicked() {
+                    crate::downloads::show_file(path);
+                }
+            } else if matches!(&state, State::Idle | State::Unavailable) {
+                if pill(ui, "Check now", None, false).clicked() {
+                    check = true;
+                }
+            } else if matches!(&state, State::Failed(_)) {
+                if pill(ui, "Check again", None, false).clicked() {
+                    check = true;
+                }
             }
         });
     });
@@ -1629,7 +1666,7 @@ fn settings_appearance(app: &mut App, ui: &mut Ui) {
 fn settings_window(app: &mut App, ui: &mut Ui) {
     section_label(ui, "Window", None);
     settings_card(ui, |ui| {
-        setting_row(ui, "Close to tray", Some("Clicking × hides the window and keeps the music playing. Click the tray icon to bring it back, or right-click it to quit. If the icon never shows up, launching NotMusic again brings the window back; --no-tray starts a session where × quits for real."), |ui| {
+        setting_row(ui, "Close to tray", Some("Clicking × hides the window and keeps the music playing. Click the tray icon to bring it back, or right-click it to quit. If the icon never shows up, launching notMusic again brings the window back; --no-tray starts a session where × quits for real."), |ui| {
             toggle(ui, &mut app.close_to_tray, "Close to tray");
         });
         divider(ui);
@@ -1676,7 +1713,7 @@ fn settings_connections(app: &mut App, ui: &mut Ui) {
         let busy = app.lastfm_busy.load(Ordering::Relaxed);
         let desc = match &app.lastfm_user {
             Some(name) => format!("Scrobbling what you play to {name}'s profile."),
-            None if busy => "Allow NotMusic on the Last.fm page that opened in your browser.".to_owned(),
+            None if busy => "Allow notMusic on the Last.fm page that opened in your browser.".to_owned(),
             None => "Scrobble what you play to your Last.fm profile.".to_owned(),
         };
         let (mut connect, mut disconnect) = (false, false);
@@ -1740,7 +1777,7 @@ fn network(app: &mut App, ui: &mut Ui) {
     use crate::proxy::{self, Setting};
     let same = |a: &Setting, b: &Setting| std::mem::discriminant(a) == std::mem::discriminant(b);
     let mut pick = None;
-    setting_row(ui, "Proxy", Some("Send everything NotMusic fetches through a proxy: songs, lyrics, sign-in and Listen together."), |ui| {
+    setting_row(ui, "Proxy", Some("Send everything notMusic fetches through a proxy: songs, lyrics, sign-in and Listen together."), |ui| {
         let btn = dropdown_button(ui, app.proxy_mode.label(), 220.0, "Proxy");
         egui::Popup::menu(&btn).show(|ui| {
             ui.set_width(220.0);
@@ -1772,7 +1809,7 @@ fn network(app: &mut App, ui: &mut Ui) {
             divider(ui);
             let desc = match proxy::system() {
                 Some(p) => format!("Windows is set to use {}.", proxy::redact(&p)),
-                None => "Windows isn't set to use a proxy, so NotMusic connects directly.".to_owned(),
+                None => "Windows isn't set to use a proxy, so notMusic connects directly.".to_owned(),
             };
             setting_row(ui, "Windows proxy", Some(&desc), |_| {});
         }

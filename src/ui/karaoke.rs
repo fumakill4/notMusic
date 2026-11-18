@@ -2264,7 +2264,7 @@ fn gap_times(start: f64, dur: f64) -> (f64, f64, f64) {
 /// it is moving.
 fn paint_instrumental(painter: &egui::Painter, cfg: &Cfg, b: &Block, xf: &Xf, t: f64, content_w: f32) -> bool {
     let em = cfg.size;
-    // The beads' proportions are the NotMusic player's: 13 dp across with 5 dp between
+    // The beads' proportions are the notMusic player's: 13 dp across with 5 dp between
     // them at a 34 sp lyric size.
     let dot = em * 13.0 / 34.0;
     let gap = em * 5.0 / 34.0;

@@ -102,8 +102,11 @@ fn body(app: &mut App, ui: &mut Ui, now: f64) {
     let lift = 20.0 - f32::from(super::titlebar::top_margin(20, 44.0));
     let header = Rect::from_min_size(area.min - vec2(0.0, if app.fullscreen { 0.0 } else { lift }), vec2(area.width(), 44.0));
     let left_controls = Rect::from_min_size(header.min + vec2(0.0, 5.0), vec2(72.0, 34.0));
-    ui.painter().rect_filled(left_controls, 17.0, theme::glass(0.12));
-    ui.painter().rect_stroke(left_controls, 17.0, egui::Stroke::new(0.8, theme::glass(0.2)), egui::StrokeKind::Inside);
+    super::native_glass::add(ui.ctx(), left_controls, 17.0, 0);
+    if !super::native_glass::available() {
+        ui.painter().rect_filled(left_controls, 17.0, theme::glass(0.12));
+        ui.painter().rect_stroke(left_controls, 17.0, egui::Stroke::new(0.8, theme::glass(0.2)), egui::StrokeKind::Inside);
+    }
     let mut hui = ui.new_child(egui::UiBuilder::new().max_rect(header).layout(egui::Layout::left_to_right(egui::Align::Center)));
     // Match the Mac player chrome: close and Picture in Picture share one glass capsule.
     let (group_rect, _) = hui.allocate_exact_size(vec2(72.0, 34.0), Sense::hover());
@@ -126,9 +129,16 @@ fn body(app: &mut App, ui: &mut Ui, now: f64) {
     }
     hui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         ui.add_space(super::titlebar::right_gap(ui.ctx(), ui.max_rect(), 0.0));
-        let (vol_rect, _) = ui.allocate_exact_size(vec2(148.0, 30.0), Sense::hover());
-        ui.painter().rect_filled(vol_rect, 15.0, theme::glass(0.13));
-        super::shell::volume_slider(app, ui, Rect::from_min_max(pos2(vol_rect.left() + 8.0, vol_rect.top() + 5.0), pos2(vol_rect.right() - 31.0, vol_rect.bottom() - 5.0)), "now-playing-volume");
+        let (vol_rect, _) = ui.allocate_exact_size(vec2(160.0, 30.0), Sense::hover());
+        super::native_glass::add(ui.ctx(), vol_rect, 15.0, 0);
+        if !super::native_glass::available() { ui.painter().rect_filled(vol_rect, 15.0, theme::glass(0.13)); }
+        let minus = Rect::from_center_size(pos2(vol_rect.left() + 13.0, vol_rect.center().y), vec2(20.0, 24.0));
+        let minus_resp = widgets::named(ui.interact(minus, ui.scope_id().with("now-playing-volume-down"), Sense::click()), "Lower volume").on_hover_cursor(egui::CursorIcon::PointingHand);
+        ui.painter().hline(minus.x_range().shrink(6.0), minus.center().y, egui::Stroke::new(1.6, theme::text_dim()));
+        if minus_resp.clicked() {
+            app.audio.set_volume((app.audio.volume() - 0.08).max(0.0));
+        }
+        super::shell::volume_slider(app, ui, Rect::from_min_max(pos2(vol_rect.left() + 27.0, vol_rect.top() + 5.0), pos2(vol_rect.right() - 31.0, vol_rect.bottom() - 5.0)), "now-playing-volume");
         super::glyphs::draw(ui, pos2(vol_rect.right() - 15.0, vol_rect.center().y), 15.0, super::glyphs::VOLUME[super::glyphs::volume_step(app.audio.volume())], theme::text());
         // Its actions (like, download, share…) are for what's heard: a song version
         // standing in for the music video. It lives beside the star under the cover;
@@ -243,15 +253,29 @@ fn body(app: &mut App, ui: &mut Ui, now: f64) {
     let mut tui = ui.new_child(egui::UiBuilder::new().max_rect(toolbar).layout(egui::Layout::left_to_right(egui::Align::Center)));
     tui.spacing_mut().item_spacing.x = 0.0;
     let (translate_rect, translate_resp) = tui.allocate_exact_size(vec2(42.0, 42.0), Sense::click());
+    super::native_glass::add(tui.ctx(), translate_rect.shrink(2.0), 20.0, 1);
     let translate_resp = widgets::named(translate_resp, "Translate and lyric options").on_hover_cursor(egui::CursorIcon::PointingHand);
     let translate_open = egui::Popup::is_id_open(tui.ctx(), egui::Popup::default_response_id(&translate_resp));
     let th = theme::anim_bool(tui.ctx(), translate_resp.id.with("h"), translate_resp.hovered() || translate_open, 0.12);
-    tui.painter().circle_filled(translate_rect.center(), 20.5, theme::lerp_color(Color32::WHITE, Color32::WHITE, th));
-    glyphs::draw(&tui, translate_rect.center(), 23.0, super::glyphs::TRANSLATE, theme::menu_fill());
+    if !super::native_glass::available() {
+        tui.painter().circle_filled(translate_rect.center(), 20.5, theme::lerp_color(Color32::WHITE, Color32::WHITE, th));
+    }
+    let tc = translate_rect.center();
+    let dark = theme::menu_fill();
+    let p = tui.painter();
+    let first = Rect::from_min_size(pos2(tc.x - 11.0, tc.y - 7.0), vec2(14.0, 13.0));
+    let second = Rect::from_min_size(pos2(tc.x - 2.0, tc.y - 2.0), vec2(14.0, 13.0));
+    p.rect_stroke(first, 3.0, egui::Stroke::new(1.5, dark), egui::StrokeKind::Inside);
+    p.rect_stroke(second, 3.0, egui::Stroke::new(1.5, dark), egui::StrokeKind::Inside);
+    p.text(first.center(), egui::Align2::CENTER_CENTER, "A", theme::semibold(9.0), dark);
+    p.text(second.center(), egui::Align2::CENTER_CENTER, "文", theme::semibold(8.0), dark);
     tui.add_space(6.0);
     let (panel_rect, _) = tui.allocate_exact_size(vec2(86.0, 42.0), Sense::hover());
-    tui.painter().rect_filled(panel_rect, 21.0, theme::glass(0.12));
-    tui.painter().rect_stroke(panel_rect, 21.0, egui::Stroke::new(0.8, theme::glass(0.18)), egui::StrokeKind::Inside);
+    super::native_glass::add(tui.ctx(), panel_rect, 21.0, 0);
+    if !super::native_glass::available() {
+        tui.painter().rect_filled(panel_rect, 21.0, theme::glass(0.12));
+        tui.painter().rect_stroke(panel_rect, 21.0, egui::Stroke::new(0.8, theme::glass(0.18)), egui::StrokeKind::Inside);
+    }
     let active = if app.np_tab == NpTab::Lyrics { Some(0) } else if app.np_tab == NpTab::UpNext { Some(1) } else { None };
     if let Some(index) = active {
         let selected = Rect::from_min_size(pos2(panel_rect.left() + 3.0 + 40.0 * index as f32, panel_rect.top() + 3.0), vec2(40.0, 36.0));
@@ -266,12 +290,21 @@ fn body(app: &mut App, ui: &mut Ui, now: f64) {
             app.np_tab = if selected { NpTab::Art } else { tab };
         }
     }
-    egui::Popup::menu(&translate_resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
+    egui::Popup::menu(&translate_resp)
+        .align(egui::RectAlign::TOP_END)
+        .align_alternatives(&[])
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .frame(
+            egui::Frame::popup(ui.style())
+                .fill(theme::menu_fill())
+                .stroke(egui::Stroke::new(1.0, theme::glass(0.18)))
+                .corner_radius(12.0)
+                .inner_margin(egui::Margin::same(8)),
+        )
+        .show(|ui| {
         ui.set_width(270.0);
         ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-        ui.add_space(4.0);
         lyric_options(app, ui);
-        ui.add_space(4.0);
     });
 }
 
@@ -285,6 +318,54 @@ fn art_side(cs: &crate::preset::CoverStyle, col: Rect) -> f32 {
 /// transport — the order the reference keeps them in. `px`: the size to fetch the image
 /// at (fixed while the column glides).
 #[allow(clippy::too_many_arguments)]
+/// Scroll a long artist/album banner continuously inside its original text lane.
+/// The repeated linked copy makes the loop seamless while preserving artist links.
+#[allow(clippy::too_many_arguments)]
+fn marquee_linked_line(
+    ui: &mut Ui,
+    pos: egui::Pos2,
+    text: &str,
+    links: &[crate::model::Link],
+    font: egui::FontId,
+    color: Color32,
+    width: f32,
+    now: f64,
+    actions: &mut Vec<Action>,
+) -> (Rect, bool) {
+    let full = widgets::galley(ui, text, font.clone(), color, 100_000.0);
+    let text_width = full.size().x;
+    let lane_height = full.size().y.max(font.size * 1.5);
+    let lane = Rect::from_min_size(pos, vec2(width.max(1.0), lane_height));
+    if text_width <= lane.width() {
+        return (widgets::linked_text(ui, pos, text, links, font, color, width, actions), false);
+    }
+
+    let gap = 42.0;
+    let cycle = text_width + gap;
+    let offset = ((now.max(0.0) * 24.0) % f64::from(cycle)) as f32;
+    let mut clipped = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(lane)
+            .layout(egui::Layout::left_to_right(egui::Align::Min)),
+    );
+    let area = egui::ScrollArea::horizontal()
+        .id_salt(ui.scope_id().with(("np-meta-marquee", pos.x as i32, pos.y as i32)))
+        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
+        .auto_shrink([false, false])
+        .horizontal_scroll_offset(offset);
+    area.show(&mut clipped, |content| {
+        content.set_min_width(cycle * 2.0);
+        content.set_min_height(lane_height);
+        for _ in 0..2 {
+            let (slot, _) = content.allocate_exact_size(vec2(text_width, lane_height), Sense::hover());
+            widgets::linked_text(content, slot.min, text, links, font.clone(), color, text_width, actions);
+            content.add_space(gap);
+        }
+    });
+    ui.ctx().request_repaint_after(std::time::Duration::from_millis(33));
+    (lane, true)
+}
+
 fn cover_column(app: &mut App, ui: &mut Ui, col: Rect, track: &crate::model::Track, no_lyrics: bool, now: f64, px: u32) {
     use crate::preset::Shape;
     // A handoff's outgoing song is still what's heard: its star, menu and seek are its own.
@@ -341,7 +422,18 @@ fn cover_column(app: &mut App, ui: &mut Ui, col: Rect, track: &crate::model::Tra
     let info_y = art.bottom() + 22.0;
     // The star and the ⋯ menu share the information line's right end.
     let text_w = w - 76.0;
-    text_at(ui, pos2(x0, info_y), &track.title, theme::semibold(17.0), Color32::WHITE, text_w);
+    let title_rect = marquee_linked_line(
+        ui,
+        pos2(x0, info_y),
+        &track.title,
+        &[],
+        theme::semibold(17.0),
+        Color32::WHITE,
+        text_w,
+        now,
+        &mut app.actions,
+    ).0;
+    named(ui.interact(title_rect, ui.scope_id().with("np-title"), Sense::click()), &track.title).on_hover_text(&track.title);
     // Each artist opens their own page (features included); the album follows the
     // artist behind an em dash, as the reference writes the line.
     let mut line = track.artist_line();
@@ -351,9 +443,20 @@ fn cover_column(app: &mut App, ui: &mut Ui, col: Rect, track: &crate::model::Tra
         line = format!("{line} — {}", album.name);
     }
     let line_w = text_w;
-    let line_rect = widgets::linked_text(ui, pos2(x0, info_y + 21.0), &line, &track.artists, theme::regular(15.0), theme::text_dim(), line_w, &mut app.actions);
+    let (line_rect, line_scrolling) = marquee_linked_line(
+        ui,
+        pos2(x0, info_y + 21.0),
+        &line,
+        &track.artists,
+        theme::regular(15.0),
+        theme::text_dim(),
+        line_w,
+        now,
+        &mut app.actions,
+    );
     // The album after the em dash opens its page too, underlined like the artists.
-    if let Some(album) = track.album.as_ref().filter(|a| !a.name.is_empty())
+    if !line_scrolling
+        && let Some(album) = track.album.as_ref().filter(|a| !a.name.is_empty())
         && let Some(id) = album.id.clone()
     {
         let g = widgets::galley(ui, &line, theme::regular(15.0), theme::text_dim(), line_w);
@@ -507,9 +610,8 @@ fn cover_column(app: &mut App, ui: &mut Ui, col: Rect, track: &crate::model::Tra
         let resp = if live { resp.on_hover_cursor(egui::CursorIcon::PointingHand) } else { resp };
         let h = theme::anim_bool(ui.ctx(), resp.id.with("h"), live && resp.hovered(), 0.1);
         let p = theme::anim_bool(ui.ctx(), resp.id.with("p"), live && resp.is_pointer_button_down_on(), 0.1);
-        if h > 0.0 {
-            ui.painter().circle_filled(pos2(xs[i], ty), sizes[i] / 2.0 * (1.0 - 0.1 * p), Color32::from_white_alpha((0.1 * h * 255.0) as u8));
-        }
+        // The transport controls stay as clean glyphs on hover; only the glyph
+        // brightens and the pressed state scales it slightly.
         (resp, h, p)
     };
     let (r, h, p) = btn(ui, 0, "shuffle", "Shuffle up next", true);
@@ -775,13 +877,17 @@ fn sync_label(k: SyncKind) -> &'static str {
 /// The ⋯ menu: the song's actions, and with lyrics showing, the source picker,
 /// translation and romanization toggles, and this song's timing offset above them.
 pub(super) fn options_menu(app: &mut App, ui: &mut Ui, rect: Rect, track: &crate::model::Track, lyrics: bool) {
+    options_menu_faded(app, ui, rect, track, lyrics, 1.0);
+}
+
+pub(super) fn options_menu_faded(app: &mut App, ui: &mut Ui, rect: Rect, track: &crate::model::Track, lyrics: bool, alpha: f32) {
     let resp = ui.interact(rect, ui.scope_id().with("np-options"), Sense::click());
     let resp = named(resp, "Options").on_hover_cursor(egui::CursorIcon::PointingHand);
     let open = egui::Popup::is_id_open(ui.ctx(), egui::Popup::default_response_id(&resp));
     let h = theme::anim_bool(ui.ctx(), resp.id.with("h"), resp.hovered() || open, 0.12);
-    ui.painter().circle_filled(rect.center(), 17.0, theme::glass(0.09 + 0.07 * h));
+    ui.painter().circle_filled(rect.center(), 17.0, theme::with_alpha(theme::glass(0.09 + 0.07 * h), alpha));
     for dx in [-6.0, 0.0, 6.0] {
-        ui.painter().circle_filled(rect.center() + vec2(dx, 0.0), 1.9, theme::with_alpha(Color32::WHITE, 0.75 + 0.25 * h));
+        ui.painter().circle_filled(rect.center() + vec2(dx, 0.0), 1.9, theme::with_alpha(Color32::WHITE, alpha * (0.75 + 0.25 * h)));
     }
     egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
         ui.set_width(270.0);
@@ -826,10 +932,20 @@ pub(super) fn options_menu(app: &mut App, ui: &mut Ui, rect: Rect, track: &crate
 }
 
 fn lyric_options(app: &mut App, ui: &mut Ui) {
-    let Some((id, set)) = app.lyrics.as_ref() else { return };
+    let Some((id, set)) = app.lyrics.as_ref() else {
+        ui.add_space(8.0);
+        ui.label(egui::RichText::new("Lyrics aren't ready yet").color(theme::text_dim()));
+        ui.add_space(8.0);
+        return;
+    };
     let id = id.clone();
     let available = app.lyric_prefs.available(set);
-    let Some(shown) = app.lyric_prefs.choose(&id, set) else { return };
+    let Some(shown) = app.lyric_prefs.choose(&id, set) else {
+        ui.add_space(8.0);
+        ui.label(egui::RichText::new("No lyrics are available for this track").color(theme::text_dim()));
+        ui.add_space(8.0);
+        return;
+    };
     let n = available.len();
     let mut pick = None;
     menu_caption(ui, if n > 1 { "LYRICS SOURCE" } else { "LYRICS SOURCE · ONLY ONE FOUND" });

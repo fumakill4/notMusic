@@ -21,7 +21,7 @@ const UNISON_API: &str = "https://unison.betterlyrics.org/lyrics";
 const LRCRED_API: &str = "https://lrc.red/";
 
 /// lrc.red's free API asks callers to identify themselves with a link.
-const LRCRED_UA: &str = concat!("NotMusic/", env!("CARGO_PKG_VERSION"), " (+https://github.com/fumakill4/NotMusic)");
+const LRCRED_UA: &str = concat!("notMusic/", env!("CARGO_PKG_VERSION"), " (+https://github.com/fumakill4/notMusic)");
 
 /// One source of lyrics, in the extension's default priority order (its
 /// `PROVIDER_CONFIGS`, without the two YouTube sources).

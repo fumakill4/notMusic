@@ -178,12 +178,13 @@ pub fn github_link(ui: &mut Ui) {
 pub struct NotesDialog {
     pub version: String,
     pub ready: bool,
+    pub download_url: Option<String>,
 }
 
 pub fn dialog(app: &mut App, ctx: &egui::Context) {
     let Some(d) = app.notes_dialog.clone() else { return };
     let body = app.updater.as_ref().and_then(|u| u.notes(&d.version));
-    let (mut close, mut restart) = (false, false);
+    let (mut close, mut restart, mut download) = (false, false, false);
     let accent = app.accent_color();
     let modal = egui::Modal::new(egui::Id::unique("release-notes")).frame(surface()).backdrop_color(theme::shade(0.55)).show(ctx, |ui| {
         let w = 540.0_f32.min(ctx.content_rect().width() - 48.0);
@@ -193,16 +194,18 @@ pub fn dialog(app: &mut App, ctx: &egui::Context) {
             ui.horizontal(|ui| {
                 widgets::icon_at(ui, ui.cursor().min + vec2(8.0, 8.0), icon::SPARKLES, 15.0, accent);
                 ui.add_space(22.0);
-                let label = if d.ready { "UPDATE READY" } else { "WHAT'S NEW" };
+                let label = if d.ready { "UPDATE READY" } else if d.download_url.is_some() { "UPDATE AVAILABLE" } else { "WHAT'S NEW" };
                 let mut j = LayoutJob::default();
                 j.append(label, 0.0, TextFormat { font_id: theme::semibold(12.0), color: theme::text_dim(), extra_letter_spacing: 1.0, ..Default::default() });
                 ui.label(j);
             });
             ui.add_space(8.0);
-            ui.label(egui::RichText::new(format!("NotMusic {}", d.version)).font(theme::bold(26.0)).color(theme::text()));
+            ui.label(egui::RichText::new(format!("notMusic {}", d.version)).font(theme::bold(26.0)).color(theme::text()));
             ui.add_space(6.0);
             let sub = if d.ready {
                 format!("You're on {}. It's downloaded and installs when you close the app.", crate::update::current_version())
+            } else if d.download_url.is_some() {
+                "A new version is available. Download the DMG from GitHub, then open it to install manually.".to_owned()
             } else {
                 "The version you're running.".to_owned()
             };
@@ -230,7 +233,15 @@ pub fn dialog(app: &mut App, ctx: &egui::Context) {
         egui::Frame::new().inner_margin(Margin { left: 28, right: 28, top: 16, bottom: 16 }).show(ui, |ui| {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.spacing_mut().item_spacing.x = 10.0;
-                if d.ready {
+                if d.download_url.is_some() {
+                    download = widgets::pill(ui, "Download .dmg", None, true).clicked();
+                    close = widgets::pill(ui, "Later", None, false).clicked();
+                    if download {
+                        if let Some(updater) = &app.updater {
+                            updater.download_available();
+                        }
+                    }
+                } else if d.ready {
                     restart = widgets::pill(ui, "Restart to update", None, true).clicked();
                     close = widgets::pill(ui, "Later", None, false).clicked();
                 } else {
@@ -240,6 +251,9 @@ pub fn dialog(app: &mut App, ctx: &egui::Context) {
         });
     });
     if close || modal.should_close() {
+        app.notes_dialog = None;
+    }
+    if download {
         app.notes_dialog = None;
     }
     if restart {
@@ -308,7 +322,7 @@ pub fn card(app: &mut App, ctx: &egui::Context) {
             });
         });
     if all {
-        app.notes_dialog = Some(NotesDialog { version: version.clone(), ready: false });
+        app.notes_dialog = Some(NotesDialog { version: version.clone(), ready: false, download_url: None });
     }
     if all || dismiss {
         app.whats_new = None;

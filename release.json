@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "version": "2.0.0",
+  "build": 1,
+  "buildLabel": "1",
+  "revision": "cfef25ef7062",
+  "artifacts": [
+    {
+      "platform": "macos",
+      "name": "NotMusic-v2.0.0-macos-arm64.dmg",
+      "sha256": "7e280716ee4da8883578cdd8f2c755b26cd4a09715f725fbb3577b8a702a82e9",
+      "minimumOS": "macOS 11.0",
+      "installation": "mount-and-copy-to-Applications"
+    }
+  ]
+}

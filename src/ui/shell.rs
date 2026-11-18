@@ -393,14 +393,14 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
             let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 52.0), Sense::click());
             let mut resp = named(resp, "Restart to update").on_hover_cursor(egui::CursorIcon::PointingHand);
             if collapsed {
-                resp = resp.on_hover_text(format!("Restart to update to NotMusic {v}"));
+                resp = resp.on_hover_text(format!("Restart to update to notMusic {v}"));
             }
             let h = theme::anim_bool(ui.ctx(), resp.id.with("h"), resp.hovered(), 0.15);
             ui.painter().rect_filled(rect, 12.0, theme::with_alpha(look.accent, 0.22 + 0.12 * h));
             glyphs::draw(ui, pos2(rect.left() + ICON_X, rect.center().y), LUCIDE, glyphs::SPARKLES, theme::text());
             if a > 0.0 {
                 ui.painter().text(pos2(rect.left() + 46.0, rect.top() + 17.0), Align2::LEFT_CENTER, "Restart to update", theme::semibold(13.5), theme::with_alpha(theme::text(), a));
-                ui.painter().text(pos2(rect.left() + 46.0, rect.top() + 35.0), Align2::LEFT_CENTER, format!("NotMusic {v}"), theme::regular(12.0), theme::with_alpha(theme::text(), 0.75 * a));
+                ui.painter().text(pos2(rect.left() + 46.0, rect.top() + 35.0), Align2::LEFT_CENTER, format!("notMusic {v}"), theme::regular(12.0), theme::with_alpha(theme::text(), 0.75 * a));
             }
             restart = resp.clicked();
         }
@@ -424,17 +424,15 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
 
 // ------------------------------------------------------------------ top bar
 
-pub fn top_bar(app: &mut App, ui: &mut Ui) {
+pub fn top_bar(app: &mut App, _ui: &mut Ui) {
     // The search field lives on the Search page: nothing here to anchor suggestions to.
     // Its focus flag is left alone here: the page still has to see it before the box
     // is drawn, or it would keep overwriting what's being typed with the page's query.
     app.search_rect = None;
-    // Painted over the panel's top-right rather than laid out: the page's heading can
-    // then start on the title bar's line instead of under a row kept for the avatar.
-    let panel = ui.max_rect();
-    let row = Rect::from_min_size(panel.min, vec2(panel.width(), 44.0));
-    let right = panel.right() - super::titlebar::right_gap(ui.ctx(), row, 20.0);
-    let r = Rect::from_min_max(pos2(right - 36.0, panel.top()), pos2(right, panel.top() + 36.0));
+    // Account controls live in each page's scrollable header, alongside its title.
+}
+
+pub(super) fn account_button(app: &mut App, ui: &mut Ui, r: Rect) {
     let resp = ui.interact(r, ui.scope_id().with("account"), Sense::click());
     let resp = named(resp, "Account").on_hover_cursor(egui::CursorIcon::PointingHand);
     let initial = app.account_name.as_deref().and_then(|n| n.chars().next()).unwrap_or('?');
@@ -451,11 +449,6 @@ pub fn top_bar(app: &mut App, ui: &mut Ui) {
     }
     if resp.clicked() {
         app.actions.push(Action::Go(Page::Settings));
-    }
-    if app.loading {
-        let spin = Rect::from_min_size(pos2(r.left() - 34.0, r.top() + 8.0), Vec2::splat(20.0));
-        let mut cui = ui.new_child(egui::UiBuilder::new().max_rect(spin));
-        cui.spinner();
     }
 }
 
@@ -679,7 +672,7 @@ fn suggestion_text(ui: &Ui, pos: Pos2, text: &str, typed: &str, width: f32) {
 // ------------------------------------------------------------------ player bar
 
 /// The player: one frosted capsule floating over the bottom of the window, as in the
-/// NotMusic desktop app. Transport on the left, the sleeve with its titles and seek
+/// notMusic desktop app. Transport on the left, the sleeve with its titles and seek
 /// line in the middle, favourites / lyrics / queue / volume on the right.
 pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
     let full = ui.max_rect();
@@ -692,11 +685,6 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
     let w = (full.width() - 24.0).min(668.0);
     let cap = Rect::from_min_size(pos2(full.center().x - w / 2.0, full.bottom() - 16.0 - H), vec2(w, H));
     let ctx = ui.ctx().clone();
-    // Keep the capsule surface and controls unchanged; only remove the separate
-    // full-width background fade above it.
-    ui.painter().rect_filled(cap, H / 2.0, theme::panel(0.96));
-    ui.painter().rect_stroke(cap, H / 2.0, egui::Stroke::new(1.0, theme::glass(0.2)), egui::StrokeKind::Inside);
-
     let status = app.audio.status.clone();
     // An Automix handoff keeps the outgoing song on this strip until the next one is
     // the louder of the two.
@@ -705,9 +693,21 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
         Some(_) => app.shown().cloned(),
         None => app.current().cloned(),
     };
+    const PLAYER_BAR_GLASS_GROUP: u64 = 0x504c_4159_4552;
+    crate::ui::native_glass::add_group(&ctx, cap, H / 2.0, 0, PLAYER_BAR_GLASS_GROUP);
+    if !crate::ui::native_glass::available() {
+        ui.painter().rect_filled(cap, H / 2.0, theme::player_glass());
+    }
+    // Keep only a quiet perimeter edge; an inner sheen line read as a stray white
+    // divider inside the capsule.
+    if !crate::ui::native_glass::available() {
+        ui.painter().rect_stroke(cap, H / 2.0, egui::Stroke::new(0.7, theme::glass(0.12)), egui::StrokeKind::Inside);
+    }
+
     let enabled = track.is_some();
     let playing = app.playing();
     let accent = app.accent_color();
+    let white_player_controls = theme::light();
     let cy = cap.center().y;
     let narrow = cap.width() < 550.0;
     let pad = 16.0;
@@ -721,8 +721,8 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
     let text_r = right_l - 6.0;
     let text_w = (text_r - text_l).max(20.0);
     let ink = |h: f32| {
-        let c = theme::lerp_color(theme::text_dim(), theme::text(), h);
-        if enabled { c } else { c.gamma_multiply(0.45) }
+        let c = if white_player_controls { Color32::WHITE } else { theme::lerp_color(theme::text_dim(), theme::text(), h) };
+        if white_player_controls || enabled { c } else { c.gamma_multiply(0.45) }
     };
 
     // Transport: shuffle | previous · play · next | repeat. The glyphs alone carry the
@@ -736,6 +736,7 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
     if !narrow {
         let r = tbtn(ui, run_l + 14.0, "shuffle", "Shuffle up next");
         let h = theme::anim_bool(&ctx, r.id.with("h"), r.hovered(), 0.12);
+        crate::ui::native_glass::keep_clear_icon(&ctx, Rect::from_center_size(r.rect.center(), Vec2::splat(28.0)), "shuffle", PLAYER_BAR_GLASS_GROUP);
         glyphs::draw(ui, r.rect.center(), 28.0, glyphs::SHUFFLE, ink(h));
         if r.clicked() {
             app.shuffle_upcoming();
@@ -743,6 +744,7 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
     }
     let r = tbtn(ui, mid - 33.0, "prev", "Previous");
     let h = theme::anim_bool(&ctx, r.id.with("h"), r.hovered(), 0.12);
+    crate::ui::native_glass::keep_clear_icon(&ctx, Rect::from_center_size(r.rect.center(), Vec2::splat(26.0)), "prev", PLAYER_BAR_GLASS_GROUP);
     glyphs::draw(ui, r.rect.center(), 26.0, glyphs::PREVIOUS, ink(h));
     if r.clicked() && enabled {
         app.prev();
@@ -761,6 +763,12 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
         // through a buffer, and a hard cut between the two weights flickers.
         let fg = ink(0.55 + 0.45 * h);
         if morph < 1.0 {
+            crate::ui::native_glass::keep_clear_icon(&ctx, Rect::from_center_size(c, Vec2::splat(28.0)), "play", PLAYER_BAR_GLASS_GROUP);
+        }
+        if morph > 0.0 {
+            crate::ui::native_glass::keep_clear_icon(&ctx, Rect::from_center_size(c, Vec2::splat(28.0)), "pause", PLAYER_BAR_GLASS_GROUP);
+        }
+        if morph < 1.0 {
             glyphs::draw(ui, c, 28.0, glyphs::PLAY, theme::with_alpha(fg, 1.0 - morph));
         }
         if morph > 0.0 {
@@ -772,6 +780,7 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
     }
     let r = tbtn(ui, mid + 33.0, "next", "Next");
     let h = theme::anim_bool(&ctx, r.id.with("h"), r.hovered(), 0.12);
+    crate::ui::native_glass::keep_clear_icon(&ctx, Rect::from_center_size(r.rect.center(), Vec2::splat(26.0)), "next", PLAYER_BAR_GLASS_GROUP);
     glyphs::draw(ui, r.rect.center(), 26.0, glyphs::NEXT, ink(h));
     if r.clicked() && enabled {
         app.next();
@@ -784,7 +793,9 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
         };
         let r = tbtn(ui, run_l + run_w - 8.0 - 14.0, "repeat", "Repeat");
         let h = theme::anim_bool(&ctx, r.id.with("h"), r.hovered(), 0.12);
-        glyphs::draw(ui, r.rect.center(), 28.0, glyph, if on { accent } else { ink(h) });
+        let repeat_asset = match app.queue.repeat { Repeat::One => "repeat_one", _ => "repeat" };
+        crate::ui::native_glass::keep_clear_icon(&ctx, Rect::from_center_size(r.rect.center(), Vec2::splat(28.0)), repeat_asset, PLAYER_BAR_GLASS_GROUP);
+        glyphs::draw(ui, r.rect.center(), 28.0, glyph, if on && !white_player_controls { accent } else { ink(h) });
         if r.clicked() {
             app.queue.repeat = match app.queue.repeat {
                 Repeat::Off => Repeat::All,
@@ -828,6 +839,7 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
     let sy = cap.bottom() - 7.0;
     let thick = 2.0 + 2.0 * focus;
     let line_r = Rect::from_min_max(pos2(sx0, sy - thick / 2.0), pos2(sx1, sy + thick / 2.0));
+    crate::ui::native_glass::keep_clear(&ctx, line_r.expand2(vec2(0.0, 1.0)), PLAYER_BAR_GLASS_GROUP);
     ui.painter().rect_filled(line_r, thick / 2.0, theme::glass(0.18));
     // Automix's handoff window, tinted on the part still to play.
     if mix > 0.5 {
@@ -846,6 +858,7 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
     // Sleeve: the mark when nothing is playing; a click goes up into the player.
     match &track {
         Some(t) => {
+            crate::ui::native_glass::keep_clear(&ctx, cover, PLAYER_BAR_GLASS_GROUP);
             widgets::paint_cover_xfade(ui, egui::Id::unique("player-bar-art"), cover, &t.thumbs, 6.0, 1.0);
             let ar = ui.interact(cover, ui.scope_id().with("bar-art"), Sense::click());
             let ar = named(ar, "Open now playing").on_hover_cursor(egui::CursorIcon::PointingHand);
@@ -862,6 +875,7 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
             }
         }
         None => {
+            crate::ui::native_glass::keep_clear(&ctx, cover, PLAYER_BAR_GLASS_GROUP);
             ui.painter().rect_filled(cover, 6.0, theme::glass(0.08));
             paint_mark(ui, cover.shrink(8.0));
         }
@@ -871,11 +885,13 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
     // the times, which take the same row so nothing overlaps.
     let (title, _) = match &track {
         Some(t) => (t.title.clone(), ()),
-        None => ("NotMusic".to_owned(), ()),
+        None => ("notMusic".to_owned(), ()),
     };
     let fade = 1.0 - 0.7 * focus;
     let afade = 1.0 - focus;
-    let tr = text_at(ui, pos2(text_l, cy - 15.0), &title, theme::semibold(13.0), theme::with_alpha(theme::text(), fade), text_w);
+    let title_color = if white_player_controls { Color32::WHITE } else { theme::text() };
+    let tr = text_at(ui, pos2(text_l, cy - 15.0), &title, theme::semibold(13.0), theme::with_alpha(title_color, fade), text_w);
+    crate::ui::native_glass::keep_clear_text(&ctx, tr, &title, 13.0, true, PLAYER_BAR_GLASS_GROUP);
     if let Some(t) = &track {
         let tre = ui.interact(tr, ui.scope_id().with("bar-title"), Sense::click());
         if named(tre, &t.title).on_hover_text(&t.title).on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
@@ -886,12 +902,14 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
     if afade > 0.01 && let Some(t) = &track {
         for (i, a) in t.artists.iter().enumerate() {
             let s = if i + 1 < t.artists.len() { format!("{}, ", a.name) } else { a.name.clone() };
-            let r = text_at(ui, pos2(ax, cy + 2.0), &s, theme::regular(11.5), theme::with_alpha(theme::text_dim(), afade), (text_l + text_w - ax).max(10.0));
+            let artist_color = if white_player_controls { Color32::WHITE } else { theme::text_dim() };
+            let r = text_at(ui, pos2(ax, cy + 2.0), &s, theme::regular(11.5), theme::with_alpha(artist_color, afade), (text_l + text_w - ax).max(10.0));
+            crate::ui::native_glass::keep_clear_text(&ctx, r, &s, 11.5, false, PLAYER_BAR_GLASS_GROUP);
             if let Some(id) = &a.id {
                 let resp = ui.interact(r, ui.scope_id().with(("bar-artist", i)), Sense::click());
                 let resp = named(resp, &a.name).on_hover_cursor(egui::CursorIcon::PointingHand);
                 if resp.hovered() {
-                    ui.painter().hline(r.x_range(), r.bottom(), egui::Stroke::new(1.0, theme::text_dim()));
+                    ui.painter().hline(r.x_range(), r.bottom(), egui::Stroke::new(1.0, artist_color));
                 }
                 if resp.clicked() {
                     app.actions.push(Action::Open(Target::Artist(id.clone())));
@@ -904,11 +922,16 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
         }
     }
     if focus > 0.0 && total > 0.0 {
-        let col = theme::with_alpha(theme::text(), focus);
-        let g = widgets::galley(ui, &fmt_time(pos as u32), theme::semibold(11.5), theme::text(), 80.0);
+        let time_color = if white_player_controls { Color32::WHITE } else { theme::text() };
+        let col = theme::with_alpha(time_color, focus);
+        let g = widgets::galley(ui, &fmt_time(pos as u32), theme::semibold(11.5), time_color, 80.0);
+        let elapsed = fmt_time(pos as u32);
+        crate::ui::native_glass::keep_clear_text(&ctx, Rect::from_min_size(pos2(text_l, cy + 2.0), g.size()), &elapsed, 11.5, true, PLAYER_BAR_GLASS_GROUP);
         ui.painter().galley(pos2(text_l, cy + 2.0), g, col);
         let left = fmt_time((total - pos).max(0.0) as u32);
-        let g = widgets::galley(ui, &format!("-{left}"), theme::semibold(11.5), theme::text(), 80.0);
+        let remaining = format!("-{left}");
+        let g = widgets::galley(ui, &remaining, theme::semibold(11.5), time_color, 80.0);
+        crate::ui::native_glass::keep_clear_text(&ctx, Rect::from_min_size(pos2(text_r - g.size().x, cy + 2.0), g.size()), &remaining, 11.5, true, PLAYER_BAR_GLASS_GROUP);
         ui.painter().galley(pos2(text_r - g.size().x, cy + 2.0), g, col);
     }
 
@@ -942,7 +965,11 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
         let dim = if heard.is_some() { 1.0 } else { 0.4 };
         // The filled star grows in under the ring rather than replacing it, as the
         // reference's own two-weight mark does.
-        let tint = theme::lerp_color(ink(h), accent, pop).gamma_multiply(dim);
+        let tint = if white_player_controls { Color32::WHITE.gamma_multiply(dim) } else { theme::lerp_color(ink(h), accent, pop).gamma_multiply(dim) };
+        crate::ui::native_glass::keep_clear_icon(&ctx, Rect::from_center_size(r.rect.center(), Vec2::splat(18.0)), "star", PLAYER_BAR_GLASS_GROUP);
+        if pop > 0.0 {
+            crate::ui::native_glass::keep_clear_icon(&ctx, Rect::from_center_size(r.rect.center(), Vec2::splat(18.0)), "star_filled", PLAYER_BAR_GLASS_GROUP);
+        }
         glyphs::draw(ui, r.rect.center(), 18.0, glyphs::STAR, tint);
         if pop > 0.0 {
             glyphs::draw(ui, r.rect.center(), 18.0, glyphs::STAR_FILLED, theme::with_alpha(tint, tint.a() as f32 / 255.0 * pop));
@@ -955,7 +982,8 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
         let lyrics_on = app.np_open && app.np_tab == NpTab::Lyrics && !app.no_lyrics();
         let r = rbtn(ui, 1, "lyrics", "Lyrics");
         let h = theme::anim_bool(&ctx, r.id.with("h"), r.hovered(), 0.15);
-        glyphs::draw(ui, r.rect.center(), 18.0, if lyrics_on { glyphs::LYRICS } else { glyphs::LYRICS_OFF }, if lyrics_on { accent } else { ink(h) });
+        crate::ui::native_glass::keep_clear_icon(&ctx, Rect::from_center_size(r.rect.center(), Vec2::splat(18.0)), if lyrics_on { "lyrics" } else { "lyrics_off" }, PLAYER_BAR_GLASS_GROUP);
+        glyphs::draw(ui, r.rect.center(), 18.0, if lyrics_on { glyphs::LYRICS } else { glyphs::LYRICS_OFF }, if lyrics_on && !white_player_controls { accent } else { ink(h) });
         if r.clicked() {
             if lyrics_on {
                 app.np_open = false;
@@ -967,7 +995,8 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
         let queue_open = if app.np_open { app.np_tab == NpTab::UpNext } else { app.queue_open };
         let r = rbtn(ui, 2, "queue", "Up next");
         let h = theme::anim_bool(&ctx, r.id.with("h"), r.hovered(), 0.15);
-        glyphs::draw(ui, r.rect.center(), 18.0, glyphs::QUEUE, if queue_open { accent } else { ink(h) });
+        crate::ui::native_glass::keep_clear_icon(&ctx, Rect::from_center_size(r.rect.center(), Vec2::splat(18.0)), "queue", PLAYER_BAR_GLASS_GROUP);
+        glyphs::draw(ui, r.rect.center(), 18.0, glyphs::QUEUE, if queue_open && !white_player_controls { accent } else { ink(h) });
         if r.clicked() {
             if app.np_open {
                 app.np_tab = if queue_open { NpTab::Art } else { NpTab::UpNext };
@@ -982,7 +1011,9 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
     let h = theme::anim_bool(&ctx, r.id.with("h"), r.hovered(), 0.15);
     // Three arcs, not two: the desktop app lights them a third at a time.
     let step = glyphs::volume_step(vol);
-    glyphs::draw(ui, r.rect.center(), 18.0, glyphs::VOLUME[step], theme::lerp_color(theme::text_dim(), theme::text(), h));
+    crate::ui::native_glass::keep_clear_icon(&ctx, Rect::from_center_size(r.rect.center(), Vec2::splat(18.0)), &format!("volume_{step}"), PLAYER_BAR_GLASS_GROUP);
+    let volume_color = if white_player_controls { Color32::WHITE } else { theme::lerp_color(theme::text_dim(), theme::text(), h) };
+    glyphs::draw(ui, r.rect.center(), 18.0, glyphs::VOLUME[step], volume_color);
     if r.hovered() {
         let scroll = ui.input(|i| i.smooth_scroll_delta.y);
         if scroll != 0.0 {
@@ -1012,12 +1043,12 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
     }
 }
 
-/// The NotMusic mark, white, fitted inside `r` (the sleeve slot when nothing plays).
+/// The notMusic mark, white, fitted inside `r` (the sleeve slot when nothing plays).
 fn paint_mark(ui: &Ui, r: Rect) {
     mark(ui, r, Color32::from_white_alpha(170));
 }
 
-/// The NotMusic mark, fitted inside `r`, tinted `tint`.
+/// The notMusic mark, fitted inside `r`, tinted `tint`.
 fn mark(ui: &Ui, r: Rect, tint: Color32) {
     const MARK: &[u8] = include_bytes!("../../assets/icon/mark.png");
     const W: f32 = 256.0;
@@ -1039,17 +1070,29 @@ fn mark(ui: &Ui, r: Rect, tint: Color32) {
     ui.painter().image(tex.id(), dst, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), tint);
 }
 
-/// The white NotMusic wordmark replaces the sample app's mark in the sidebar.
+/// The white notMusic wordmark replaces the sample app's mark in the sidebar.
 fn sidebar_wordmark(ui: &Ui, r: Rect, opacity: f32) {
-    const LOGO: &[u8] = include_bytes!("../../assets/icon/notmusic-wordmark.png");
-    let key = egui::Id::new("notmusic-sidebar-wordmark");
+    const LOGO_DARK: &[u8] = include_bytes!("../../assets/icon/notmusic-wordmark.png");
+    const LOGO_LIGHT: &[u8] = include_bytes!("../../assets/icon/notmusic-wordmark-light-trimmed.png");
+    let light = theme::light();
+    let logo = if light { LOGO_LIGHT } else { LOGO_DARK };
+    let key = egui::Id::new(("notmusic-sidebar-wordmark", light));
     let tex = match ui.ctx().data(|d| d.get_temp::<egui::TextureHandle>(key)) {
         Some(t) => t,
         None => {
-            let Ok(img) = image::load_from_memory(LOGO) else { return };
+            let Ok(img) = image::load_from_memory(logo) else { return };
             let img = img.into_rgba8();
             let color = egui::ColorImage::from_rgba_unmultiplied([img.width() as usize, img.height() as usize], img.as_raw());
-            let t = ui.ctx().load_texture("notmusic-sidebar-wordmark", color, egui::TextureOptions::LINEAR);
+            let t = ui.ctx().load_texture(
+                "notmusic-sidebar-wordmark",
+                color,
+                egui::TextureOptions {
+                    magnification: egui::TextureFilter::Linear,
+                    minification: egui::TextureFilter::Linear,
+                    wrap_mode: egui::TextureWrapMode::ClampToEdge,
+                    mipmap_mode: Some(egui::TextureFilter::Linear),
+                },
+            );
             ui.ctx().data_mut(|d| d.insert_temp(key, t.clone()));
             t
         }
@@ -1057,7 +1100,11 @@ fn sidebar_wordmark(ui: &Ui, r: Rect, opacity: f32) {
     let fitted = r.shrink2(vec2(2.0, 2.0));
     let image = tex.size_vec2();
     let k = (fitted.width() / image.x).min(fitted.height() / image.y);
-    let dst = Rect::from_center_size(fitted.center(), image * k);
+    let mut size = image * k;
+    if light {
+        size *= 1.16;
+    }
+    let dst = Rect::from_center_size(fitted.center(), size);
     ui.painter().image(tex.id(), dst, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::from_white_alpha((opacity * 255.0) as u8));
 }
 
@@ -1076,7 +1123,9 @@ pub(super) fn volume_slider(app: &mut App, ui: &mut Ui, slider: Rect, salt: &str
     ui.painter().rect_filled(track_r, 2.0, theme::glass(0.15));
     let fill = Rect::from_min_size(track_r.min, vec2(track_r.width() * vol, 4.0));
     ui.painter().rect_filled(fill, 2.0, theme::lerp_color(theme::text_dim(), theme::text(), vh));
-    ui.painter().circle_filled(pos2(fill.right(), track_r.center().y), 2.0 + 4.5 * vh, theme::text());
+    let knob_w = 17.0 + 3.0 * vh;
+    let knob_h = 9.0 + 3.0 * vh;
+    ui.painter().rect_filled(Rect::from_center_size(pos2(fill.right(), track_r.center().y), vec2(knob_w, knob_h)), knob_h / 2.0, theme::text());
     if let Some(p) = vresp.interact_pointer_pos()
         && (vresp.dragged() || vresp.clicked())
     {

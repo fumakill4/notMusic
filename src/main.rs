@@ -51,7 +51,7 @@ use crossbeam_channel::unbounded;
 /// Window size on first launch, and the smallest it may be (points).
 pub const DEFAULT_SIZE: [f32; 2] = [1100.0, 740.0];
 pub const MIN_SIZE: [f32; 2] = [760.0, 480.0];
-pub const BUILD_NUMBER: &str = "5";
+pub const BUILD_NUMBER: &str = "9";
 
 fn main() -> eframe::Result {
     // Child-process modes for the webview windows (see login.rs / turnstile.rs).
@@ -104,14 +104,21 @@ fn main() -> eframe::Result {
     // taskbar, so automated test runs don't pop up over whatever the user is doing.
     let background = std::env::var_os("YTM_BACKGROUND").is_some();
     let mut viewport = egui::ViewportBuilder::default()
-        .with_title("NotMusic")
+        .with_title("notMusic")
         .with_app_id("notmusic")
         .with_maximized(false)
         .with_inner_size(DEFAULT_SIZE)
         .with_min_inner_size(MIN_SIZE)
         // Windows: the app draws its own title bar (see `ui::titlebar`).
         .with_decorations(!ui::custom_titlebar())
+        .with_transparent(cfg!(target_os = "macos"))
         .with_icon(appicon::get(appicon::load(&data_dir())).icon_data().expect("bundled icons are valid PNGs"));
+    #[cfg(target_os = "macos")]
+    {
+        // Draw the app's background behind macOS's traffic-light area so the title bar
+        // blends into the app instead of appearing as a separate dark strip.
+        viewport = viewport.with_fullsize_content_view(true).with_titlebar_shown(false);
+    }
     if background {
         viewport = viewport.with_position([-4000.0, 0.0]).with_inner_size([1920.0, 1057.0]).with_active(false).with_taskbar(false);
     }
@@ -137,7 +144,7 @@ fn main() -> eframe::Result {
     };
 
     let run = eframe::run_native(
-        "NotMusic",
+        "notMusic",
         options,
         Box::new(|cc| {
             let ctx = cc.egui_ctx.clone();

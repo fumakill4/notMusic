@@ -1,5 +1,5 @@
-//! The mini player: the same window, shrunk to a square cover-art window with a hover
-//! control deck, kept above other windows unless unpinned. Ctrl+M or the player bar's
+//! The mini player: the same window, shrunk to a square cover-art window with a compact
+//! control deck. Ctrl+M or the player bar's
 //! button switches; the expand button (or a double-click) switches back.
 //!
 //! Each mode keeps its own place: the full window goes back to exactly where it was
@@ -8,8 +8,8 @@
 //! monitors with different scaling. Launching always opens the full window: closed in
 //! the mini player, the app saves the full window's place for next time.
 //!
-//! On Windows the app draws the mini player's window buttons itself (see `titlebar`). Elsewhere
-//! the system's frame stays, with its own close button, so the mini player leaves its out.
+//! The mini player is frameless; the app draws its full-player control itself. Elsewhere
+//! the system's frame stays when the full player is open.
 //! Keeping on top is up to the window manager (Wayland has no way to ask).
 
 use std::time::Duration;
@@ -25,10 +25,10 @@ use crate::theme::{self, icon};
 
 /// Square cover-art mini player, matching the desktop reference.
 pub const SIZE: Vec2 = vec2(340.0, 340.0);
-const MIN_W: f32 = 340.0;
-const MAX_W: f32 = 340.0;
-/// Kept above other windows until unpinned.
-const PINNED_BY_DEFAULT: bool = true;
+const MIN_W: f32 = 220.0;
+const MAX_W: f32 = 560.0;
+/// Do not cover other apps when the floating player opens.
+const PINNED_BY_DEFAULT: bool = false;
 /// What the strip's × does.
 const CLOSE: CloseButton = CloseButton::LikeFullWindow;
 /// From the work area's corner, the first time.
@@ -128,7 +128,22 @@ const SYSTEM: Screens = Screens { on_a_monitor: crate::fullscreen::on_a_monitor,
 
 /// A remembered strip size, within the limits (they may have changed since).
 fn clamp_size(p: Place) -> Place {
-    Place { w: p.w.clamp(MIN_W, MAX_W), h: SIZE.y, ..p }
+    let side = ((p.w + p.h) * 0.5).clamp(MIN_W, MAX_W);
+    Place { w: side, h: side, ..p }
+}
+
+/// Pick the edge the listener moved, then keep the floating window square.
+fn resized_square(p: Place, previous: Option<Place>) -> Place {
+    let side = (if let Some(previous) = previous {
+        let dw = (p.w - previous.w).abs();
+        let dh = (p.h - previous.h).abs();
+        if dw > dh * 1.5 { p.w }
+        else if dh > dw * 1.5 { p.h }
+        else { (p.w + p.h) * 0.5 }
+    } else {
+        (p.w + p.h) * 0.5
+    }).clamp(MIN_W, MAX_W);
+    Place { w: side, h: side, ..p }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -180,6 +195,10 @@ pub struct Mini {
     shown_at: f64,
     /// The scale the size limits were last sent at: winit keeps them in pixels.
     limits_scale: Option<f32>,
+    /// Last native size observed while the user resizes the frameless mini window.
+    resize_sample: Option<Vec2>,
+    /// Time of the last native size change; square correction waits until it settles.
+    resize_sample_at: f64,
     screens: Screens,
     /// The full window's normal place after coming back maximized, until it's restored down.
     restored_max: Option<Place>,
@@ -189,7 +208,9 @@ impl Mini {
     pub fn load(get: impl Fn(&str) -> Option<String>) -> Self {
         Mini {
             on: false,
-            pinned: get("mini_pinned").map_or(PINNED_BY_DEFAULT, |v| v == "1"),
+            // Ignore the old persisted always-on-top default; the floating player should
+            // use normal window level so it never blocks other apps on launch.
+            pinned: PINNED_BY_DEFAULT,
             place: get("mini_window").and_then(|v| serde_json::from_str(&v).ok()).map(clamp_size),
             full: None,
             was_maximized: false,
@@ -197,6 +218,8 @@ impl Mini {
             wanted: None,
             shown_at: f64::NEG_INFINITY,
             limits_scale: None,
+            resize_sample: None,
+            resize_sample_at: f64::NEG_INFINITY,
             screens: SYSTEM,
             restored_max: None,
         }
@@ -323,9 +346,32 @@ impl Mini {
         if self.showing()
             && !minimized
             && !maximized
-            && let Some(p) = Place::current(ctx).filter(|p| p.w >= MIN_W - 1.0)
+            && let Some(p) = Place::current(ctx).filter(|p| p.w >= MIN_W - 1.0 && p.h >= MIN_W - 1.0)
         {
-            self.place = Some(clamp_size(p));
+            let square = resized_square(p, self.place);
+            let current_size = p.size();
+            let changed = self.resize_sample.is_none_or(|sample| (current_size - sample).length() > 0.5);
+            if changed {
+                self.resize_sample = Some(current_size);
+                self.resize_sample_at = now;
+            }
+            // macOS reports every pointer movement as a new native size. Forcing
+            // the other dimension back to square on each event fights the user's
+            // drag and makes the window visibly stutter. Let native resizing run
+            // freely, then make one square correction after the size settles.
+            let settled = now - self.resize_sample_at >= 0.14;
+            if !settled && (current_size - square.size()).length() > 1.5 {
+                ctx.request_repaint_after(Duration::from_millis(16));
+            }
+            if settled && (current_size - square.size()).length() > 1.5 {
+                ctx.send_viewport_cmd(ViewportCommand::InnerSize(square.size_at(ctx.zoom_factor())));
+                self.resize_sample = None;
+                self.resize_sample_at = f64::NEG_INFINITY;
+            } else if (current_size - square.size()).length() <= 1.5 {
+                self.resize_sample = None;
+                self.resize_sample_at = f64::NEG_INFINITY;
+            }
+            self.place = Some(square);
         }
         let Some(sw) = &mut self.switch else { return };
         ctx.request_repaint_after(Duration::from_millis(16));
@@ -471,8 +517,8 @@ impl Mini {
     /// window's minimum doesn't hold the strip up.
     fn limits(&mut self, ctx: &egui::Context, mini: bool) {
         if mini {
-            ctx.send_viewport_cmd(ViewportCommand::MinInnerSize(SIZE));
-            ctx.send_viewport_cmd(ViewportCommand::MaxInnerSize(SIZE));
+            ctx.send_viewport_cmd(ViewportCommand::MinInnerSize(vec2(MIN_W, MIN_W)));
+            ctx.send_viewport_cmd(ViewportCommand::MaxInnerSize(vec2(MAX_W, MAX_W)));
         } else {
             ctx.send_viewport_cmd(ViewportCommand::MaxInnerSize(Vec2::INFINITY));
             ctx.send_viewport_cmd(ViewportCommand::MinInnerSize(Vec2::from(crate::MIN_SIZE)));
@@ -483,12 +529,117 @@ impl Mini {
 
 /// The floating mini player uses the cover as its full-window surface. Its details and
 /// controls fade in over the artwork while the pointer is inside the window.
+fn bottom_veil(ctx: &egui::Context) -> egui::TextureHandle {
+    const W: usize = 680;
+    const H: usize = 356;
+    const R: f32 = 44.0;
+    let id = egui::Id::new("mini-bottom-veil");
+    if let Some(texture) = ctx.data(|data| data.get_temp::<egui::TextureHandle>(id)) {
+        return texture;
+    }
+    let mut pixels = Vec::with_capacity(W * H);
+    for y in 0..H {
+        let t = y as f32 / (H - 1) as f32;
+        let base_alpha = 210.0 * t * t;
+        for x in 0..W {
+            let mut coverage: f32 = 1.0;
+            // The veil fades in vertically; only its lower corners are rounded.
+            // Rounding the top would draw a second, inset frame over the artwork.
+            let corner = if (x as f32) < R && (y as f32) > H as f32 - R {
+                Some((R - x as f32, y as f32 - (H as f32 - R)))
+            } else if (x as f32) > W as f32 - R && (y as f32) > H as f32 - R {
+                Some((x as f32 - (W as f32 - R), y as f32 - (H as f32 - R)))
+            } else {
+                None
+            };
+            if let Some((dx, dy)) = corner {
+                coverage = (R - (dx * dx + dy * dy).sqrt() + 1.0).clamp(0.0, 1.0);
+            }
+            pixels.push(Color32::from_black_alpha((base_alpha * coverage).round() as u8));
+        }
+    }
+    let image = egui::ColorImage::new([W, H], pixels);
+    let texture = ctx.load_texture("mini-bottom-veil", image, egui::TextureOptions::LINEAR);
+    ctx.data_mut(|data| data.insert_temp(id, texture.clone()));
+    texture
+}
+
+/// Create one small blurred copy of the active cover for the hovered MiniPlayer deck.
+/// The original cover remains crisp; this texture is cached and replaced on track change.
+fn frosted_cover(ctx: &egui::Context, app: &App, thumbs: &[crate::model::Thumb], r: Rect) -> Option<egui::TextureHandle> {
+    let pixels = (r.width() * ctx.pixels_per_point()) as u32;
+    const STEPS: [u32; 9] = [60, 120, 180, 240, 360, 544, 720, 960, 1200];
+    let px = STEPS.into_iter().find(|s| *s >= pixels).unwrap_or(1200);
+    let thumb = crate::model::pick_thumb(thumbs, px.min(544))?;
+    let url = crate::model::sized(&thumb.url, px);
+    let cache_key = egui::Id::new("mini-frosted-cover");
+    if let Some((cached_url, tex)) = ctx.data(|d| d.get_temp::<(String, egui::TextureHandle)>(cache_key))
+        && cached_url == url
+    {
+        return Some(tex);
+    }
+    let now = ctx.input(|i| i.time);
+    let attempt_key = egui::Id::new("mini-frosted-cover-last-attempt");
+    if ctx.data(|d| d.get_temp::<f64>(attempt_key)).is_some_and(|last| now - last < 0.45) {
+        ctx.request_repaint_after(Duration::from_millis(450));
+        return None;
+    }
+    ctx.data_mut(|d| d.insert_temp(attempt_key, now));
+    let source = crate::images::cached_rgba(&url).or_else(|| {
+        let bytes = crate::images::cached_bytes(app.backend.data_dir(), &url)?;
+        Some(image::load_from_memory(&bytes).ok()?.into_rgba8())
+    })?;
+    let small = image::imageops::resize(&source, 512, 512, image::imageops::FilterType::Triangle);
+    let soft_blur = image::imageops::blur(&small, 10.0);
+    let mut blurred = image::imageops::blur(&small, 36.0);
+    let (w, h) = blurred.dimensions();
+    // Match the lower mask to the cover/window's 22 pt radius at every resize size.
+    let radius = 22.0 * h as f32 / SIZE.x;
+    // Start the blur above the title and increase both its opacity and radius
+    // continuously toward the bottom, like Music's frosted artwork treatment.
+    // Begin the frost higher than the metadata lane. A short fade leaves a
+    // visible transition edge on high-contrast sleeves; Apple Music carries
+    // the blur softly behind the title before it becomes stronger below.
+    let fade_points = 390.0_f32.min(r.height().max(1.0) * 0.92);
+    let deck_top = (1.0 - fade_points / r.height().max(1.0)) * h as f32;
+    let fade_height = (fade_points / r.height().max(1.0) * h as f32).max(1.0);
+    for (x, y, px) in blurred.enumerate_pixels_mut() {
+        let t = ((y as f32 - deck_top) / fade_height).clamp(0.0, 1.0);
+        let blend = (t * t * (3.0 - 2.0 * t)).powf(0.75);
+        let soft = soft_blur.get_pixel(x, y);
+        for channel in 0..3 {
+            let gradual_blur = f32::from(soft[channel]) * (1.0 - blend) + f32::from(px[channel]) * blend;
+            px[channel] = (gradual_blur * (0.90 - 0.14 * blend)) as u8;
+        }
+        px[3] = (f32::from(px[3]) * blend) as u8;
+        if px[3] == 0 { continue; }
+        if y as f32 > h as f32 - radius {
+            let cy = h as f32 - radius;
+            let (dx, dy) = if (x as f32) < radius {
+                (radius - x as f32, y as f32 - cy)
+            } else if (x as f32) > w as f32 - radius {
+                (x as f32 - (w as f32 - radius), y as f32 - cy)
+            } else {
+                (0.0, 0.0)
+            };
+            if dx > 0.0 {
+                px[3] = ((radius - (dx * dx + dy * dy).sqrt() + 1.0).clamp(0.0, 1.0) * 255.0) as u8;
+            }
+        }
+    }
+    let color = egui::ColorImage::from_rgba_unmultiplied([w as usize, h as usize], blurred.as_raw());
+    let tex = ctx.load_texture("mini-frosted-cover", color, egui::TextureOptions::LINEAR);
+    ctx.data_mut(|d| d.insert_temp(cache_key, (url, tex.clone())));
+    Some(tex)
+}
+
 pub fn strip(app: &mut App, ui: &mut Ui, now: f64) {
     let ctx = ui.ctx().clone();
     let r = ctx.content_rect();
+    let ui_scale = (r.width() / SIZE.x).clamp(MIN_W / SIZE.x, MAX_W / SIZE.x);
     let over = ctx.input(|i| i.pointer.hover_pos()).is_some_and(|p| r.contains(p));
-    let focus = ctx.memory(|m| m.focused()).is_some();
-    let reveal = theme::anim_bool(&ctx, "mini-chrome", over || focus || app.current().is_none(), 0.18);
+    let reveal = theme::anim_bool(&ctx, "mini-chrome", over, 0.16);
+    let chrome = reveal;
     if reveal > 0.0 && reveal < 1.0 {
         ctx.request_repaint();
     }
@@ -499,22 +650,40 @@ pub fn strip(app: &mut App, ui: &mut Ui, now: f64) {
     let hold = app.mix_hold().is_some();
     let track = if hold { app.shown().cloned() } else { app.current().cloned() };
     if let Some(t) = &track {
-        paint_cover(ui, r, &t.thumbs, 0.0, 1.0);
+        let corner = 22.0 * ui_scale;
+        paint_cover(ui, r, &t.thumbs, corner, 1.0);
         if let Some(album) = t.album.as_ref().map(|a| a.name.clone()).filter(|a| !a.is_empty()) {
             let artist = t.artists.first().map(|a| a.name.clone()).unwrap_or_else(|| t.artist_line());
             app.apple_cover(&album, &artist, Some(&t.title));
             if let Some(sprite) = app.apple_sprite(&ctx, &album, &artist, (r.width() * ctx.pixels_per_point()).round() as u32) {
-                widgets::paint_motion(ui, r, 0.0, &sprite);
+                widgets::paint_motion(ui, r, corner, &sprite);
             }
         }
     } else {
-        ui.painter().rect_filled(r, 0.0, theme::panel(1.0));
+        ui.painter().rect_filled(r, 22.0, theme::panel(1.0));
         icon_at(ui, r.center(), icon::MUSIC, 54.0, theme::text_faint());
     }
 
-    // Artwork-only at rest; the hover controls sit on a single continuous veil.
-    let deck = Rect::from_min_max(pos2(r.left(), r.bottom() - 178.0), r.max);
-    super::shell::vgradient(ui.painter(), deck, Color32::TRANSPARENT, Color32::from_black_alpha((220.0 * reveal) as u8));
+    // Keep the artwork clean at rest. Metadata, progress, and controls fade in on hover.
+    // Start the frosted veil at the reference's lower artwork boundary.
+    let deck_top = r.bottom() - 155.0 * ui_scale;
+    let deck = Rect::from_min_max(pos2(r.left(), deck_top), r.max);
+    if reveal > 0.0 {
+        let blur = track.as_ref().and_then(|t| frosted_cover(&ctx, app, &t.thumbs, r));
+        if let Some(tex) = blur {
+            // The image blends into the clear cover at the top and keeps the same
+            // outer frame as the window; don't layer another rounded deck over it.
+            ui.painter().image(
+                tex.id(), r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+                Color32::from_white_alpha((reveal * 255.0).round() as u8),
+            );
+        } else {
+            // If the cover bytes have not reached the small local image cache yet,
+            // show the soft fallback band while they finish loading.
+            let veil = bottom_veil(&ctx);
+            ui.painter().image(veil.id(), deck, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::from_white_alpha((reveal * 255.0).round() as u8));
+        }
+    }
 
     enum Mark { Font(char), Raster(&'static [u8]) }
     let button = |ui: &mut Ui, center: Pos2, size: f32, key: &str, glyph: Mark, label: &str, alpha: f32| -> egui::Response {
@@ -523,145 +692,191 @@ pub fn strip(app: &mut App, ui: &mut Ui, now: f64) {
             .on_hover_text(label)
             .on_hover_cursor(egui::CursorIcon::PointingHand);
         let h = theme::anim_bool(ui.ctx(), resp.id.with("hover"), resp.hovered(), 0.12);
-        if h > 0.0 {
-            ui.painter().circle_filled(center, size * 0.48, theme::glass(0.10 * h * alpha));
+        let is_full = key == "full";
+        let fill = Color32::from_black_alpha(((166.0 + 36.0 * h) * alpha) as u8);
+        let glass_rect = Rect::from_center_size(center, Vec2::splat(size));
+        if is_full {
+            super::native_glass::add_faded(ui.ctx(), glass_rect, size * 0.5, 1, alpha);
         }
-        let tint = theme::with_alpha(theme::text(), alpha * (0.72 + 0.28 * h));
+        if !super::native_glass::available() {
+            if is_full {
+                ui.painter().circle_filled(center, size * 0.48, fill);
+            }
+        }
+        if is_full && alpha > 0.01 && !super::native_glass::available() {
+            ui.painter().circle_stroke(center, size * 0.48, egui::Stroke::new(1.0, Color32::from_white_alpha((118.0 * alpha) as u8)));
+        }
+        let tint = if is_full { Color32::from_white_alpha((255.0 * alpha) as u8) } else { theme::with_alpha(theme::text(), alpha * (0.72 + 0.28 * h)) };
         match glyph {
             Mark::Font(g) => icon_at(ui, center, g, size * 0.48, tint),
-            Mark::Raster(g) => glyphs::draw(ui, center, size * 0.56, g, tint),
+            Mark::Raster(g) => glyphs::draw(ui, center, size * if is_full { 0.66 } else { 0.56 }, g, tint),
         }
         resp
     };
 
-    // Top-left: return to the full player and pin/unpin the floating window.
+    // Top-left: one circular shortcut returns to the full player, as in the reference.
     let top_y = r.top() + 23.0;
-    let full = button(ui, pos2(r.left() + 23.0, top_y), 30.0, "full", Mark::Font(icon::MAXIMIZE_2), "Full player", reveal);
-    if full.clicked() && reveal > 0.5 {
+    let full = button(ui, pos2(r.left() + 23.0, top_y), 30.0, "full", Mark::Raster(glyphs::FULL_PLAYER), "Full player", chrome);
+    if full.clicked() {
         app.actions.push(Action::Mini(false));
     }
-    let pin_glyph = if app.mini.pinned { icon::PIN } else { icon::PIN_OFF };
-    let pin = button(ui, pos2(r.left() + 58.0, top_y), 30.0, "pin", Mark::Font(pin_glyph), if app.mini.pinned { "Stop keeping on top" } else { "Keep on top" }, reveal);
-    if pin.clicked() && reveal > 0.5 {
-        app.mini.set_pinned(&ctx, !app.mini.pinned);
-    }
-    let close = button(ui, pos2(r.right() - 20.0, top_y), 30.0, "close", Mark::Font(icon::X), "Close", reveal);
-    if close.clicked() && reveal > 0.5 {
-        match CLOSE {
-            CloseButton::LikeFullWindow => ctx.send_viewport_cmd(ViewportCommand::Close),
-            CloseButton::Expand => app.actions.push(Action::Mini(false)),
-        }
-    }
 
-    // Top-right: Lyrics / Queue and a compact, always-visible volume control.
-    let top_w = 166.0;
-    let top = Rect::from_min_size(pos2(r.right() - top_w - 10.0, r.top() + 8.0), vec2(top_w, 30.0));
-    ui.painter().rect_filled(top, 15.0, theme::shade(0.55).gamma_multiply(0.78 * reveal));
-    let lyr = button(ui, pos2(top.left() + 18.0, top.center().y), 26.0, "lyrics", Mark::Raster(glyphs::LYRICS), "Lyrics", reveal);
-    if lyr.clicked() && reveal > 0.5 && track.is_some() {
+    // One glass capsule: Lyrics, Queue, volume slider, and speaker.
+    let top_w = 164.0;
+    let top_h = 32.0;
+    let top_radius = 16.0;
+    let top = Rect::from_min_size(pos2(r.right() - top_w - 8.0, r.top() + 7.0), vec2(top_w, top_h));
+    super::native_glass::add_faded(&ctx, top, top_radius, 0, chrome);
+    if !super::native_glass::available() {
+        ui.painter().rect_filled(top, top_radius, theme::shade(0.55).gamma_multiply(0.76 * chrome));
+        ui.painter().rect_stroke(top, top_radius, egui::Stroke::new(0.7, theme::glass(0.16 * chrome)), egui::StrokeKind::Inside);
+    }
+    let lyr = button(ui, pos2(top.left() + 18.0, top.center().y), 27.0, "lyrics", Mark::Raster(glyphs::LYRICS), "Lyrics", chrome);
+    if lyr.clicked() && track.is_some() {
         app.np_tab = super::NpTab::Lyrics;
         app.actions.push(Action::Mini(false));
         app.actions.push(Action::OpenNowPlaying(true));
     }
-    let queue = button(ui, pos2(top.left() + 48.0, top.center().y), 26.0, "queue", Mark::Raster(glyphs::QUEUE), "Queue", reveal);
-    if queue.clicked() && reveal > 0.5 && track.is_some() {
+    let queue = button(ui, pos2(top.left() + 48.0, top.center().y), 27.0, "queue", Mark::Raster(glyphs::QUEUE), "Queue", chrome);
+    if queue.clicked() && track.is_some() {
         app.np_tab = super::NpTab::UpNext;
         app.actions.push(Action::Mini(false));
         app.actions.push(Action::OpenNowPlaying(true));
     }
-    let vol = app.audio.volume();
-    let vg = glyphs::VOLUME[glyphs::volume_step(vol)];
-    let vol_rect = Rect::from_center_size(pos2(top.left() + 72.0, top.center().y), vec2(24.0, 26.0));
-    let vr = named(ui.interact(vol_rect, ui.scope_id().with("mini-square-volume-toggle"), Sense::click()), "Mute / unmute")
-        .on_hover_cursor(egui::CursorIcon::PointingHand);
-    glyphs::draw(ui, vol_rect.center(), 16.0, vg, theme::with_alpha(theme::text(), reveal));
-    if vr.clicked() && reveal > 0.5 {
-        let stash = super::shell::unmute_id();
-        if vol > 0.0 {
-            ui.data_mut(|d| d.insert_temp(stash, vol));
-            app.audio.set_volume(0.0);
-        } else {
-            app.audio.set_volume(ui.data(|d| d.get_temp::<f32>(stash)).unwrap_or(0.6));
+    if chrome > 0.01 {
+        let vol = app.audio.volume();
+        let vg = glyphs::VOLUME[glyphs::volume_step(vol)];
+        let vol_rect = Rect::from_center_size(pos2(top.left() + 74.0, top.center().y), vec2(22.0, 26.0));
+        let vr = named(ui.interact(vol_rect, ui.scope_id().with("mini-square-volume-toggle"), Sense::click()), "Mute / unmute")
+            .on_hover_cursor(egui::CursorIcon::PointingHand);
+        glyphs::draw(ui, vol_rect.center(), 16.0, vg, theme::text());
+        if vr.clicked() {
+            let stash = super::shell::unmute_id();
+            if vol > 0.0 {
+                ui.data_mut(|d| d.insert_temp(stash, vol));
+                app.audio.set_volume(0.0);
+            } else {
+                app.audio.set_volume(ui.data(|d| d.get_temp::<f32>(stash)).unwrap_or(0.6));
+            }
         }
-    }
-    if reveal > 0.5 {
-        super::shell::volume_slider(app, ui, Rect::from_min_max(pos2(top.left() + 88.0, top.top() + 7.0), pos2(top.right() - 8.0, top.bottom() - 7.0)), "mini-square");
+        super::shell::volume_slider(app, ui, Rect::from_min_max(pos2(top.left() + 90.0, top.top() + 7.0), pos2(top.right() - 19.0, top.bottom() - 7.0)), "mini-square");
     }
 
     // Metadata and song actions keep the reference's bottom-left placement.
-    let meta_top = r.bottom() - 164.0;
-    let right = r.right() - 12.0;
-    let title_width = (r.width() - 104.0).max(120.0);
+    let meta_top = r.bottom() - 145.0 * ui_scale;
+    let right = r.right() - 12.0 * ui_scale;
+    let title_width = (r.width() - 104.0 * ui_scale).max(100.0 * ui_scale);
     if let Some(t) = &track {
-        let title = text_at(ui, pos2(r.left() + 14.0, meta_top), &t.title, theme::semibold(14.0), theme::with_alpha(Color32::WHITE, reveal), title_width);
+        let title = marquee_text_at(
+            ui,
+            pos2(r.left() + 14.0 * ui_scale, meta_top),
+            &t.title,
+            theme::semibold((17.0 * ui_scale).clamp(12.0, 22.0)),
+            theme::with_alpha(Color32::WHITE, chrome),
+            title_width,
+            now,
+            chrome > 0.01,
+        );
         named(ui.interact(title, ui.scope_id().with("mini-square-title"), Sense::click()), &t.title).on_hover_text(&t.title);
         let artists = t.artists.iter().map(|a| a.name.as_str()).collect::<Vec<_>>().join(", ");
-        let artist_rect = text_at(ui, pos2(r.left() + 14.0, meta_top + 21.0), &artists, theme::regular(12.0), theme::with_alpha(Color32::WHITE.gamma_multiply(0.78), reveal), title_width);
+        // Match Apple's two-line hierarchy: title first, then a moving artist–title
+        // metadata line. Keep the text in a clipped lane so it never runs under actions.
+        let metadata = if artists.is_empty() { t.title.clone() } else { format!("{artists} — {}", t.title) };
+        let artist_rect = marquee_text_at(
+            ui,
+            pos2(r.left() + 14.0 * ui_scale, meta_top + 23.0 * ui_scale),
+            &metadata,
+            theme::regular((14.5 * ui_scale).clamp(10.0, 19.0)),
+            theme::with_alpha(Color32::WHITE.gamma_multiply(0.82), chrome),
+            title_width,
+            now,
+            chrome > 0.01,
+        );
         let badge_width = super::nowplaying::audio_badge_icon_width(app, true);
-        if badge_width > 0.0 && artist_rect.right() + 8.0 + badge_width <= right - 76.0 {
+        if chrome > 0.01 && badge_width > 0.0 && artist_rect.right() + 8.0 + badge_width <= right - 76.0 {
             super::nowplaying::audio_badge_icon(app, ui, pos2(artist_rect.right() + 8.0 + badge_width / 2.0, artist_rect.center().y), true);
         }
 
         let heard = if hold { t.clone() } else { app.playing_track().cloned().unwrap_or_else(|| t.clone()) };
         let liked = app.liked.contains(&heard.id);
-        let like_rect = Rect::from_center_size(pos2(right - 50.0, meta_top + 12.0), Vec2::splat(30.0));
+        let like_rect = Rect::from_center_size(pos2(right - 50.0 * ui_scale, meta_top + 22.0 * ui_scale), Vec2::splat(30.0 * ui_scale));
         let like = named(ui.interact(like_rect, ui.scope_id().with("mini-square-like"), Sense::click()), if liked { "Unlike" } else { "Like" })
             .on_hover_cursor(egui::CursorIcon::PointingHand);
-        glyphs::draw(ui, like_rect.center(), 18.0, if liked { glyphs::STAR_FILLED } else { glyphs::STAR }, theme::with_alpha(Color32::WHITE, reveal));
-        if like.clicked() && reveal > 0.5 {
+        glyphs::draw(ui, like_rect.center(), 18.0 * ui_scale, if liked { glyphs::STAR_FILLED } else { glyphs::STAR }, theme::with_alpha(Color32::WHITE, chrome));
+        if like.clicked() {
             app.actions.push(Action::Like(heard.clone(), !liked));
         }
-        if reveal > 0.5 {
-            super::nowplaying::options_menu(app, ui, Rect::from_center_size(pos2(right - 17.0, meta_top + 12.0), Vec2::splat(30.0)), &heard, app.np_tab == super::NpTab::Lyrics);
-        }
+        super::nowplaying::options_menu_faded(app, ui, Rect::from_center_size(pos2(right - 17.0 * ui_scale, meta_top + 22.0 * ui_scale), Vec2::splat(30.0 * ui_scale)), &heard, app.np_tab == super::NpTab::Lyrics, chrome);
     } else {
-        text_at(ui, pos2(r.left() + 14.0, meta_top), "Nothing playing", theme::semibold(14.0), theme::with_alpha(Color32::WHITE, reveal), title_width);
+        text_at(ui, pos2(r.left() + 14.0 * ui_scale, meta_top), "Nothing playing", theme::semibold((14.0 * ui_scale).clamp(11.0, 18.0)), theme::with_alpha(Color32::WHITE, chrome), title_width);
     }
 
     // Full transport row: shuffle, previous, play/pause, next, repeat.
-    let cy = r.bottom() - 54.0;
+    let cy = r.bottom() - 39.0 * ui_scale;
     let cx = r.center().x;
     let enabled = track.is_some();
-    let shuffle = button(ui, pos2(cx - 112.0, cy), 32.0, "shuffle", Mark::Raster(glyphs::SHUFFLE), "Shuffle up next", reveal);
-    if shuffle.clicked() && reveal > 0.5 { app.shuffle_upcoming(); }
-    let prev = button(ui, pos2(cx - 60.0, cy), 34.0, "previous", Mark::Font(icon::SKIP_BACK), "Previous", reveal);
-    if prev.clicked() && reveal > 0.5 && enabled { app.prev(); }
-    let play = ui.interact(Rect::from_center_size(pos2(cx, cy), Vec2::splat(42.0)), ui.scope_id().with("mini-square-play"), Sense::click());
+    let shuffle = button(ui, pos2(cx - 112.0 * ui_scale, cy), 32.0 * ui_scale, "shuffle", Mark::Raster(glyphs::SHUFFLE), "Shuffle up next", chrome);
+    if shuffle.clicked() { app.shuffle_upcoming(); }
+    let prev = button(ui, pos2(cx - 60.0 * ui_scale, cy), 34.0 * ui_scale, "previous", Mark::Font(icon::SKIP_BACK), "Previous", chrome);
+    if prev.clicked() && enabled { app.prev(); }
+    let play = ui.interact(Rect::from_center_size(pos2(cx, cy), Vec2::splat(42.0 * ui_scale)), ui.scope_id().with("mini-square-play"), Sense::click());
     let play = named(play, if app.playing() { "Pause" } else { "Play" }).on_hover_cursor(egui::CursorIcon::PointingHand);
     let ph = theme::anim_bool(&ctx, play.id.with("hover"), play.hovered(), 0.12);
     if app.buffering {
         let c = play.rect.center();
         let a = now as f32 * 6.0;
         let pts: Vec<Pos2> = (0..18).map(|i| c + vec2((a + i as f32 * 0.25).cos(), (a + i as f32 * 0.25).sin()) * 10.0).collect();
-        ui.painter().add(egui::Shape::Path(egui::epaint::PathShape::line(pts, egui::epaint::PathStroke::new(2.2, theme::with_alpha(Color32::WHITE, reveal)))));
+        ui.painter().add(egui::Shape::Path(egui::epaint::PathShape::line(pts, egui::epaint::PathStroke::new(2.2 * ui_scale, theme::with_alpha(Color32::WHITE, chrome)))));
         ctx.request_repaint_after(Duration::from_millis(33));
     } else {
         let glyph = if app.playing() { glyphs::PAUSE } else { glyphs::PLAY };
-        glyphs::draw(ui, play.rect.center(), 31.0, glyph, theme::with_alpha(Color32::WHITE, reveal * (0.78 + 0.22 * ph)));
+        glyphs::draw(ui, play.rect.center(), 31.0 * ui_scale, glyph, theme::with_alpha(Color32::WHITE, chrome * (0.78 + 0.22 * ph)));
     }
-    if play.clicked() && reveal > 0.5 && enabled { app.toggle(); }
-    let next = button(ui, pos2(cx + 60.0, cy), 34.0, "next", Mark::Font(icon::SKIP_FORWARD), "Next", reveal);
-    if next.clicked() && reveal > 0.5 && enabled { app.next(); }
+    if play.clicked() && enabled { app.toggle(); }
+    let next = button(ui, pos2(cx + 60.0 * ui_scale, cy), 34.0 * ui_scale, "next", Mark::Font(icon::SKIP_FORWARD), "Next", chrome);
+    if next.clicked() && enabled { app.next(); }
     let (repeat_glyph, repeat_on) = match app.queue.repeat {
         super::Repeat::Off => (glyphs::REPEAT, false),
         super::Repeat::All => (glyphs::REPEAT, true),
         super::Repeat::One => (glyphs::REPEAT_ONE, true),
     };
-    let repeat = button(ui, pos2(cx + 112.0, cy), 32.0, "repeat", Mark::Raster(repeat_glyph), "Repeat", reveal);
-    if repeat.clicked() && reveal > 0.5 {
+    let repeat = button(ui, pos2(cx + 112.0 * ui_scale, cy), 32.0 * ui_scale, "repeat", Mark::Raster(repeat_glyph), "Repeat", chrome);
+    if repeat.clicked() {
         app.queue.repeat = match app.queue.repeat {
             super::Repeat::Off => super::Repeat::All,
             super::Repeat::All => super::Repeat::One,
             super::Repeat::One => super::Repeat::Off,
         };
     }
-    if repeat_on { ui.painter().circle_filled(repeat.rect.center() + vec2(10.0, 10.0), 2.0, theme::with_alpha(app.accent_color(), reveal)); }
+    if repeat_on { ui.painter().circle_filled(repeat.rect.center() + vec2(10.0 * ui_scale, 10.0 * ui_scale), 2.0 * ui_scale, theme::with_alpha(app.accent_color(), chrome)); }
 
-    seek_line(app, ui, r, track.as_ref());
+    seek_line(app, ui, r, track.as_ref(), chrome, ui_scale);
+}
+
+/// Paint one-line metadata in a clipped lane. Long labels loop smoothly from right to
+/// left, with a small gap between copies, like the native Music floating player.
+fn marquee_text_at(ui: &Ui, pos: Pos2, text: &str, font: egui::FontId, color: Color32, width: f32, now: f64, active: bool) -> Rect {
+    let clip = Rect::from_min_size(pos, vec2(width.max(1.0), font.size * 1.5));
+    let galley = widgets::galley(ui, text, font, color, 100_000.0);
+    let galley_size = galley.size();
+    let text_width = galley_size.x;
+    let painter = ui.painter().with_clip_rect(clip);
+    if text_width <= clip.width() || !active {
+        painter.galley_with_override_text_color(pos, galley, color);
+        return Rect::from_min_size(pos, vec2(text_width.min(clip.width()), galley_size.y));
+    }
+
+    let gap = 40.0;
+    let cycle = text_width + gap;
+    let offset = ((now.max(0.0) * 24.0) % f64::from(cycle)) as f32;
+    painter.galley_with_override_text_color(pos2(pos.x - offset, pos.y), galley.clone(), color);
+    painter.galley_with_override_text_color(pos2(pos.x + cycle - offset, pos.y), galley.clone(), color);
+    ui.ctx().request_repaint_after(Duration::from_millis(33));
+    clip
 }
 
 /// A line along the bottom; thicker on hover, with the time under the pointer.
-fn seek_line(app: &mut App, ui: &mut Ui, r: Rect, track: Option<&crate::model::Track>) {
+fn seek_line(app: &mut App, ui: &mut Ui, r: Rect, track: Option<&crate::model::Track>, alpha: f32, ui_scale: f32) {
     let status = app.audio.status.clone();
     let hold = app.mix_hold().map(|h| (h.total, app.mix_hold_pos(h)));
     let total = match &hold {
@@ -674,30 +889,40 @@ fn seek_line(app: &mut App, ui: &mut Ui, r: Rect, track: Option<&crate::model::T
     };
     let held = hold.is_some();
     let pos = app.seek_drag.unwrap_or(smooth).min(total.max(0.0));
-    // Runs the window's full width, like Apple's strip; the corner radius is small
-    // enough that the bottom edge rounds it off on its own.
-    let (l, rr) = (r.left(), r.right());
-    let hit = Rect::from_min_max(pos2(l, r.bottom() - 10.0), pos2(rr, r.bottom()));
+    // Keep the seek track inside the art's rounded lower corners, rather than drawing
+    // a full-width square strip along the window edge.
+    let (l, rr) = (r.left() + 18.0 * ui_scale, r.right() - 18.0 * ui_scale);
+    let bottom = r.bottom() - 92.0 * ui_scale;
+    let hit = Rect::from_min_max(pos2(l, bottom - 8.0 * ui_scale), pos2(rr, bottom + 8.0 * ui_scale));
     let resp = ui.interact(hit, ui.scope_id().with("mini-seek"), if held { Sense::hover() } else { Sense::click_and_drag() });
     let resp = if total > 0.0 && !held { resp.on_hover_cursor(egui::CursorIcon::PointingHand) } else { resp };
     resp.widget_info(|| egui::WidgetInfo::slider(total > 0.0 && !held, pos as f64, "Seek"));
     let h = theme::anim_bool(ui.ctx(), "mini-seek-h", total > 0.0 && !held && (resp.hovered() || resp.dragged()), 0.15);
-    let thick = 4.0 + 2.0 * h;
-    let line = Rect::from_min_max(pos2(l, r.bottom() - thick), pos2(rr, r.bottom()));
-    ui.painter().rect_filled(line, 0.0, theme::glass(0.2));
+    let thick = (4.0 + 2.0 * h) * ui_scale;
+    let line = Rect::from_min_max(pos2(l, bottom - thick), pos2(rr, bottom));
+    let radius = thick * 0.5;
+    ui.painter().rect_filled(line, radius, theme::glass(0.2 * alpha));
     let frac = if total > 0.0 { pos / total } else { 0.0 };
-    ui.painter().rect_filled(Rect::from_min_size(line.min, vec2(line.width() * frac, thick)), 0.0, app.accent_color());
+    ui.painter().rect_filled(
+        Rect::from_min_size(line.min, vec2(line.width() * frac, thick)),
+        radius,
+        theme::with_alpha(app.accent_color(), alpha),
+    );
+    if total > 0.0 {
+        ui.painter().text(pos2(l, bottom + 9.0 * ui_scale), egui::Align2::LEFT_TOP, fmt_time(pos as u32), theme::regular((10.5 * ui_scale).clamp(8.0, 15.0)), Color32::WHITE.gamma_multiply(alpha));
+        ui.painter().text(pos2(rr, bottom + 9.0 * ui_scale), egui::Align2::RIGHT_TOP, format!("-{}", fmt_time((total - pos).max(0.0) as u32)), theme::regular((10.5 * ui_scale).clamp(8.0, 15.0)), Color32::WHITE.gamma_multiply(alpha));
+    }
     let at = |p: Pos2| ((p.x - l) / (rr - l).max(1.0)).clamp(0.0, 1.0) * total;
     if h > 0.0
         && let Some(p) = resp.hover_pos().or(resp.interact_pointer_pos())
     {
         let txt = format!("{} / {}", fmt_time(at(p) as u32), fmt_time(total as u32));
-        let g = widgets::galley(ui, &txt, theme::semibold(11.5), Color32::WHITE, 120.0);
-        let half = g.size().x / 2.0 + 6.0;
-        let x = p.x.clamp(r.left() + half + 2.0, r.right() - half - 2.0);
-        let bg = Rect::from_center_size(pos2(x, line.top() - 13.0), g.size() + vec2(12.0, 5.0));
-        ui.painter().rect_filled(bg, 5.0, theme::shade(0.8).gamma_multiply(h));
-        ui.painter().galley(bg.min + vec2(6.0, 2.5), g, Color32::WHITE.gamma_multiply(h));
+        let g = widgets::galley(ui, &txt, theme::semibold((11.5 * ui_scale).clamp(9.0, 16.0)), Color32::WHITE, 120.0 * ui_scale);
+        let half = g.size().x / 2.0 + 6.0 * ui_scale;
+        let x = p.x.clamp(r.left() + half + 2.0 * ui_scale, r.right() - half - 2.0 * ui_scale);
+        let bg = Rect::from_center_size(pos2(x, line.top() - 13.0 * ui_scale), g.size() + vec2(12.0, 5.0) * ui_scale);
+        ui.painter().rect_filled(bg, 5.0 * ui_scale, theme::shade(0.8).gamma_multiply(h * alpha));
+        ui.painter().galley(bg.min + vec2(6.0, 2.5) * ui_scale, g, Color32::WHITE.gamma_multiply(h * alpha));
     }
     if total > 0.0
         && let Some(p) = resp.interact_pointer_pos()
@@ -750,8 +975,8 @@ mod tests {
     #[test]
     fn remembered_sizes_stay_in_limits() {
         let p = Place { x: 5.0, y: 6.0, w: 2000.0, h: 300.0, scale: 1.25, zoom: 1.0 };
-        assert_eq!(clamp_size(p), Place { w: MAX_W, h: SIZE.y, ..p });
-        assert_eq!(clamp_size(Place { w: 10.0, ..p }).w, MIN_W);
+        assert_eq!(clamp_size(p), Place { w: MAX_W, h: MAX_W, ..p });
+        assert_eq!(clamp_size(Place { w: 10.0, h: 10.0, ..p }).w, MIN_W);
     }
 
     #[test]

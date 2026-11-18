@@ -15,6 +15,7 @@ mod karaoke;
 mod lists;
 mod lyric_prefs;
 mod mini;
+mod native_glass;
 mod notes;
 mod nowplaying;
 mod pages;
@@ -1109,6 +1110,14 @@ impl App {
 
 
 impl eframe::App for App {
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        if self.mini.showing() {
+            [0.0, 0.0, 0.0, 0.0]
+        } else {
+            Color32::from_rgba_unmultiplied(12, 12, 12, 180).to_normalized_gamma_f32()
+        }
+    }
+
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         dev_pace();
         self.lyric_view.release_hidden(ctx.cumulative_pass_nr());
@@ -1228,8 +1237,9 @@ impl eframe::App for App {
         }
     }
 
-    fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        native_glass::begin(&ctx);
         self.shortcuts(&ctx);
         let now = ctx.input(|i| i.time);
         let screen = ctx.content_rect();
@@ -1261,14 +1271,17 @@ impl eframe::App for App {
         // full window keeps its corners.
         crate::fullscreen::set_rounded((layout == mini::Layout::Mini).then(|| (theme::thumb_radius() + 1.0) * ctx.pixels_per_point()));
         if layout != mini::Layout::Full {
-            shell::background(self, ui, screen, now, None);
+            if layout != mini::Layout::Mini {
+                shell::background(self, ui, screen, now, None);
+            }
             if layout == mini::Layout::Mini {
                 mini::strip(self, ui, now);
-                titlebar::resize_sides(&ctx);
+                titlebar::resize_mini(&ctx);
                 // "Sign in to like songs" and such: shown here too, not timed out unseen.
                 shell::toast(self, &ctx, now);
                 self.mini.fade_in(&ctx, now, shell::base_color(self));
             }
+            native_glass::sync(&ctx, frame);
             dev_screenshot(&ctx, now);
             return;
         }
@@ -1277,8 +1290,9 @@ impl eframe::App for App {
             // The top of the window, down to the search box's row: what's on it comes after.
             titlebar::drag_area(ui, egui::Rect::from_min_size(screen.min, egui::vec2(screen.width(), titlebar::HEIGHT)), "main");
         }
-        if !self.fullscreen && covered {
-            // Now playing hides the pages: the player bar keeps its full-width place.
+        if !self.fullscreen && covered && !self.np_open {
+            // Keep the normal player strip on transition frames, then remove it while
+            // Now Playing is open; that screen owns the transport controls already.
             egui::Panel::bottom("player").resizable(false)
                 .exact_size(self.bar_height())
                 .frame(egui::Frame::new())
@@ -1328,14 +1342,16 @@ impl eframe::App for App {
             // The player: a frosted strip over the bottom of the main section, above the
             // pages, so their last rows fade under it instead of stopping at a seam.
             let strip = egui::Rect::from_min_max(egui::pos2(section.left(), screen.bottom() - self.bar_height()), egui::pos2(main_right, screen.bottom()));
-            egui::Area::new(egui::Id::new("player-bar"))
-                .fixed_pos(strip.min)
-                .order(egui::Order::Middle)
-                .show(&ctx, |ui| {
-                    ui.scope_builder(egui::UiBuilder::new().max_rect(strip).layout(egui::Layout::top_down(egui::Align::Min)), |ui| {
-                        shell::player_bar(self, ui, now, true);
+            if !self.np_open {
+                egui::Area::new(egui::Id::new("player-bar"))
+                    .fixed_pos(strip.min)
+                    .order(egui::Order::Middle)
+                    .show(&ctx, |ui| {
+                        ui.scope_builder(egui::UiBuilder::new().max_rect(strip).layout(egui::Layout::top_down(egui::Align::Min)), |ui| {
+                            shell::player_bar(self, ui, now, true);
+                        });
                     });
-                });
+            }
         }
         if np > 0.001 {
             let pages = theme::set_mode(&ctx, false);
@@ -1360,6 +1376,7 @@ impl eframe::App for App {
         } else {
             dev_screenshot(&ctx, now);
         }
+        native_glass::sync(&ctx, frame);
     }
 
     /// Dev hook: `YTM_FAKE_POINTER=x,y` parks a synthetic pointer there, for testing

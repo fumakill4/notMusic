@@ -366,7 +366,7 @@ impl Preset {
     fn builtin() -> Self {
         Self {
             id: DEFAULT_ID.into(),
-            name: "NotMusic".into(),
+            name: "notMusic".into(),
             blurb: "The app's own look: animated album-art background, left-aligned karaoke lyrics.".into(),
             accent: "cover".into(),
             ..Default::default()

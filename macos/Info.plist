@@ -5,17 +5,17 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>NotMusic</string>
+	<string>notMusic</string>
 	<key>CFBundleExecutable</key>
 	<string>notmusic</string>
 	<key>CFBundleIconFile</key>
-	<string>notmusic</string>
+	<string>notmusic.icns</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.fumakill4.notmusic</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>NotMusic</string>
+	<string>notMusic</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

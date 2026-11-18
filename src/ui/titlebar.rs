@@ -48,7 +48,13 @@ pub fn buttons_rect(ctx: &egui::Context) -> Option<Rect> {
 /// The top margin above a row `row` tall at the top of the window: `normal`, or with the
 /// app's title bar what centres it on the window buttons' line.
 pub fn top_margin(normal: i8, row: f32) -> i8 {
-    if custom() { ((HEIGHT - row) / 2.0).round() as i8 } else { normal }
+    if custom() {
+        ((HEIGHT - row) / 2.0).round() as i8
+    } else if cfg!(target_os = "macos") {
+        HEIGHT as i8
+    } else {
+        normal
+    }
 }
 
 /// How much of `row` (a strip along the top) the window buttons cover from its right.
@@ -186,16 +192,21 @@ fn paint_button(ui: &Ui, r: Rect, kind: Kind, resp: &egui::Response) {
 /// Resize by the window's edges and corners (not while maximized). Drawn last, above
 /// everything, but only a few points deep.
 pub fn resize_edges(ctx: &egui::Context) {
-    edges(ctx, false);
+    edges(ctx, false, false);
 }
 
 /// Resize by the left and right edges only: the mini player is as tall as its contents.
 pub fn resize_sides(ctx: &egui::Context) {
-    edges(ctx, true);
+    edges(ctx, true, false);
 }
 
-fn edges(ctx: &egui::Context, sides_only: bool) {
-    if !shown(ctx) || maximized(ctx) {
+/// A frameless MiniPlayer needs its own resize hit areas on macOS too.
+pub fn resize_mini(ctx: &egui::Context) {
+    edges(ctx, false, true);
+}
+
+fn edges(ctx: &egui::Context, sides_only: bool, frameless: bool) {
+    if (!frameless && !shown(ctx)) || maximized(ctx) {
         return;
     }
     let s = ctx.content_rect();
